@@ -228,11 +228,45 @@ function makeGrain() {
 // cap any derived copy: a 50MP source held as a second full-res canvas is a lot
 // of memory for no visible gain at 600dpi and under
 const MAXPX = 3200;
-function derivedCanvas(img) {
-  const sc = Math.min(1, MAXPX / Math.max(img.naturalWidth, img.naturalHeight));
+
+// An <img> is NOT a safe thing to rasterise from. Browsers drop decoded image
+// data under memory pressure and re-decode from src on the next draw -- and
+// that re-decode is async, so the drawImage happening right now silently draws
+// NOTHING. Two full-sheet plans is enough to trigger it, which is why this only
+// showed up with a second image on the page.
+//
+// So the moment an image lands we take our OWN copy of the pixels as an
+// ImageBitmap. That is real memory we hold until close(), not a cache the
+// browser may reclaim, so every later rasterisation draws the same thing.
+// Capped on the long edge: 6600px is a full-bleed 11in page at 600dpi, the most
+// any export can use, and it bounds what a 50MP drop costs us.
+const MASTER_MAX = 6600;
+const srcOf = it => it.bmp || it.img;                 // bitmap once it's ready
+const srcW  = s => s.naturalWidth  ?? s.width;
+const srcH  = s => s.naturalHeight ?? s.height;
+
+async function ownPixels(img) {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const sc = Math.min(1, MASTER_MAX / Math.max(w, h));
+  const dw = Math.max(1, Math.round(w * sc)), dh = Math.max(1, Math.round(h * sc));
+  try {
+    return await createImageBitmap(img, sc < 1
+      ? { resizeWidth: dw, resizeHeight: dh, resizeQuality: "high" } : undefined);
+  } catch {
+    // no createImageBitmap (or it choked): a canvas copy is still ours, which
+    // is the point -- it just costs a little more memory
+    const c = document.createElement("canvas");
+    c.width = dw; c.height = dh;
+    c.getContext("2d").drawImage(img, 0, 0, dw, dh);
+    return c;
+  }
+}
+
+function derivedCanvas(src) {
+  const sc = Math.min(1, MAXPX / Math.max(srcW(src), srcH(src)));
   const c = document.createElement("canvas");
-  c.width  = Math.max(1, Math.round(img.naturalWidth  * sc));
-  c.height = Math.max(1, Math.round(img.naturalHeight * sc));
+  c.width  = Math.max(1, Math.round(srcW(src) * sc));
+  c.height = Math.max(1, Math.round(srcH(src) * sc));
   return c;
 }
 
@@ -241,14 +275,15 @@ function derivedCanvas(img) {
 // each channel so colour survives and luminance -- which is what becomes ink --
 // follows it.
 function imgFor(it) {
+  const src = srcOf(it);
   const tone = it.tone | 0, inv = !!it.inv;
-  if (!tone && !inv) return it.img;
+  if (!tone && !inv) return src;
 
   const key = tone + "|" + (inv ? 1 : 0);
   if (it._pk === key && it._pc) return it._pc;
 
-  const c = derivedCanvas(it.img), g = c.getContext("2d", { willReadFrequently: true });
-  g.drawImage(it.img, 0, 0, c.width, c.height);
+  const c = derivedCanvas(src), g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(src, 0, 0, c.width, c.height);
   const id = g.getImageData(0, 0, c.width, c.height), d = id.data;
   const gamma = Math.pow(2, tone / 50);
   const lut = new Uint8Array(256);
@@ -269,8 +304,9 @@ function imgFor(it) {
 // plate behind it.
 function whiteSil(it) {
   if (it._sil) return it._sil;
-  const c = derivedCanvas(it.img), g = c.getContext("2d");
-  g.drawImage(it.img, 0, 0, c.width, c.height);
+  const src = srcOf(it);
+  const c = derivedCanvas(src), g = c.getContext("2d");
+  g.drawImage(src, 0, 0, c.width, c.height);
   g.globalCompositeOperation = "source-in";
   g.fillStyle = "#ffffff";
   g.fillRect(0, 0, c.width, c.height);
@@ -287,6 +323,15 @@ function whiteSil(it) {
 //     which is exactly a single plate's density at that point.
 // Different inks DO multiply, but that happens later, between plates.
 let densCanvas = null, densCtx = null;
+
+// Set by densityOf: true when the plate came out with no ink at all even though
+// something of this folder's was over the sheet. That means a source drew
+// nothing -- never cache such a plate (see renderPage).
+let densSuspect = false;
+
+const onSheet = it => it.x < S.pageIn.w && it.y < S.pageIn.h
+                   && it.x + it.w > 0 && it.y + it.h > 0;
+
 function densityOf(folder, dpi, W, H) {
   // One reused scratch canvas. Allocating two page-size canvases per folder per
   // frame churns a lot of memory, and when the browser can't satisfy a canvas
@@ -332,12 +377,53 @@ function densityOf(folder, dpi, W, H) {
   g.globalCompositeOperation = "source-over";
 
   const px = g.getImageData(0, 0, W, H).data;
-  const den = new Float32Array(W * H);
+  const den = new Float32Array(W * H);       // zero-filled: white needs no work
+  let anyInk = false;
+  // White must come out as EXACTLY 0 -- halftone's cheap cell reject tests
+  // den[] for truthiness. The coefficients sum to 1.0000000000000002, so a
+  // white pixel was landing on 1.1e-16: truthy, so nothing was ever rejected
+  // and the fast path was dead. Anything under half an 8-bit level is no ink.
+  const NONE = 1 / 512;
   for (let i = 0, p = 0; i < den.length; i++, p += 4) {
     const lum = (0.2126 * px[p] + 0.7152 * px[p+1] + 0.0722 * px[p+2]) / 255;
-    den[i] = 1 - lum;                       // white ground -> exactly 0, no ink
+    const d = 1 - lum;
+    if (d < NONE) continue;                 // stays 0: no ink, and rejectable
+    den[i] = d;
+    anyInk = true;
   }
+
+  // A folder with artwork over the sheet cannot legitimately rasterise to a
+  // blank page: even white-on-white leaves the source's own edges. Zero means a
+  // drawImage no-opped, so flag it rather than believe it.
+  // ...unless a mask is in play: an opaque white element legitimately knocks a
+  // plate back to bare paper.
+  const knockout = S.folders.some(f => f.items.some(it => it.opaque && onSheet(it)));
+  densSuspect = !anyInk && !knockout
+             && folder.items.some(it => !it.opaque && onSheet(it));
   return den;
+}
+
+// A source drew nothing this frame. Re-decode it from the file we still hold,
+// take a fresh owned copy, and redraw. Counted so a genuinely broken image
+// can't spin -- and reset on success, so a later glitch still recovers.
+function recoverSources(folder) {
+  for (const it of folder.items) {
+    if (it._fixing || (it._tries | 0) >= 3) continue;
+    it._fixing = true; it._tries = (it._tries | 0) + 1;
+    const img = new Image();
+    img.onload = async () => {
+      it.img = img;
+      const bmp = await ownPixels(img);
+      if (it.bmp && it.bmp.close) it.bmp.close();
+      it.bmp = bmp;
+      it._pc = it._pk = it._sil = null;
+      it._fixing = false; it._tries = 0;
+      S.folders.forEach(f => { f._cache = null; });
+      draw();
+    };
+    img.onerror = () => { it._fixing = false; };
+    img.src = it.url || it.img.src;
+  }
 }
 
 /* ================================================================= halftoning */
@@ -445,7 +531,7 @@ function renderPage(dpi, target, withSel, useCache) {
   c.fillStyle = S.paper;
   c.fillRect(0, 0, W, H);
 
-  let dots = 0;
+  let dots = 0, blankPlate = null;
   for (const f of S.folders) {
     if (!f.items.length) { f.peak = 0; f._cache = null; continue; }
     let canvas, drawn;
@@ -455,7 +541,13 @@ function renderPage(dpi, target, withSel, useCache) {
     } else {
       try {
         ({ canvas, drawn } = halftone(densityOf(f, dpi, W, H), f, dpi, W, H, cell, f.color));
-        if (key) f._cache = { key, canvas, drawn, peak: f.peak };
+        // NEVER cache a plate that came out blank when it shouldn't have. This
+        // is what turned a one-frame glitch into "the image is just gone": the
+        // blank was stored against the item's geometry, so it stayed blank
+        // until the item was moved or resized and the key changed. Leaving it
+        // uncached means the next frame re-rasterises and it comes back.
+        if (key && !densSuspect) f._cache = { key, canvas, drawn, peak: f.peak };
+        if (densSuspect) { recoverSources(f); blankPlate = f.name; }
       } catch (err) {
         // never let one ink take the whole page down silently
         renderError = `${f.name} failed to render: ${err.message}`;
@@ -468,6 +560,8 @@ function renderPage(dpi, target, withSel, useCache) {
     c.drawImage(canvas, px, px);
     c.globalCompositeOperation = "source-over";
   }
+
+  if (blankPlate) renderError = `${blankPlate} came out blank — re-reading that image`;
 
   if (S.grain > 0) {
     if (!grainTile) grainTile = makeGrain();
@@ -593,9 +687,25 @@ function addImage(img, folderIndex, cxIn, cyIn) {
     y: (cyIn ?? S.pageIn.h/2) - hIn/2
   };
   f.items.push(it);
+  adoptPixels(it);
   S.sel = { f: folderIndex, i: f.items.length - 1 };
   buildFolders(); buildSel(); draw();
   return it;
+}
+
+// Take our own copy of the pixels as soon as the item exists, so rasterising
+// never depends on the browser still holding a decode of the <img>.
+function adoptPixels(it) {
+  ownPixels(it.img).then(bmp => {
+    if (!S.folders.some(f => f.items.includes(it))) {   // deleted while decoding
+      if (bmp.close) bmp.close();
+      return;
+    }
+    it.bmp = bmp;
+    it._pc = it._pk = it._sil = null;                   // derived copies are stale
+    S.folders.forEach(f => { f._cache = null; });
+    draw();
+  }).catch(() => {});                                   // keep using the <img>
 }
 
 // Sniff the actual file signature. Filenames lie: a PSD saved from a browser or
@@ -611,6 +721,7 @@ async function sniffPSD(file) {
 function removeItem(fi, i) {
   const it = S.folders[fi].items[i];
   if (it && it.url) URL.revokeObjectURL(it.url);
+  if (it && it.bmp && it.bmp.close) it.bmp.close();
   S.folders[fi].items.splice(i, 1);
 }
 
@@ -1043,7 +1154,7 @@ function buildSel() {
   const box = document.getElementById("selbox");
   const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
   if (!it) { box.innerHTML = '<div class="empty">Nothing selected. Click an image on the page.</div>'; return; }
-  const eff = Math.round(it.img.naturalWidth / it.w);
+  const eff = Math.round(srcW(srcOf(it)) / it.w);
   box.innerHTML = `
     <label><span>Width</span>
       <input type="number" id="sw" min="0.2" max="60" step="0.05" value="${it.w.toFixed(2)}"> in</label>
@@ -1312,6 +1423,8 @@ function docToPSD() {
     off.getContext("2d").drawImage(canvas, f.off / 25.4 * S.dpi, f.off / 25.4 * S.dpi);
     layers.push({ name: f.name, blend: "mul ", opacity: 255, planes: planesOf(off, W, H) });
   }
+
+  if (blankPlate) renderError = `${blankPlate} came out blank — re-reading that image`;
 
   if (S.grain > 0) {
     if (!grainTile) grainTile = makeGrain();

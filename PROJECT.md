@@ -196,6 +196,50 @@ sampling for the cross-ink multiply check).
   untouched; moving a mask invalidates the other folder's cache; exports carry
   both tone and mask.
 
+## v3.5 (2026-08-28) - ROOT CAUSE: a blank plate got CACHED
+
+Davis: "I bring both images in and fit to page and one hides the other ... one
+of them disappears and the other remains until I move it or shrink it."
+
+That last clause is the whole diagnosis. Moving or scaling an item is exactly
+what changes `folderKey`, so the symptom was never about overlap or Fit page --
+it was a stale cache entry that only geometry could clear.
+
+Reproduced in a headless browser: block one frame's drawImage for a single
+source (what an evicted decode does), and that folder renders 0% ink AND STAYS
+0% on every later frame, recovering only when the item is nudged. Two bugs
+compounding:
+
+1. Rasterising straight from the <img>. The v3.3 fix kept the blob alive so the
+   browser CAN re-decode, but that re-decode is async -- the drawImage happening
+   now still draws nothing. Keeping the blob was necessary, not sufficient.
+2. `renderPage` cached that blank plate against the item's geometry, turning a
+   one-frame glitch into a permanent disappearance. This is why it looked tied
+   to the second image: two full sheets is enough memory pressure to trigger the
+   eviction in the first place.
+
+FIXES:
+- Every image is adopted into an ImageBitmap we own (`ownPixels`), capped at
+  6600px on the long edge -- a full-bleed 11in page at 600dpi, the most any
+  export can use. That is memory we hold until close(), not a cache the browser
+  may reclaim. Verified: blanking `it.img.src` outright afterwards leaves both
+  plates rendering at 0.80 peak ink.
+- A plate that rasterises to NO ink while non-opaque artwork is over the sheet
+  is never cached, and its sources are re-decoded (`recoverSources`, capped at
+  3 tries, reset on success). Verified: the glitch frame reads 0, the very next
+  frame reads 0.80 again with nothing touched.
+- Masks excluded from that test, since an opaque white element legitimately
+  knocks a plate back to bare paper. Verified the v3.4 mask case still caches.
+
+Found while fixing it: `den[]` was never exactly 0 for white. The luma
+coefficients sum to 1.0000000000000002, so a white pixel landed on 1.1e-16 --
+truthy, so halftone's cheap corner/centre cell reject rejected NOTHING and the
+"129ms -> 48ms" fast path from v3.2 had been dead ever since. Anything under
+half an 8-bit level is now clamped to 0. Sparse full sheet at 300dpi: 134ms ->
+113ms, and ink measured by MEAN LUMINANCE is byte-identical to before across
+255/220/180/128/64/0 (0.0536 / 0.1183 / 0.1926 / 0.2765 / 0.3867 / 0.5562), so
+the ink model is untouched.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked
