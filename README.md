@@ -149,6 +149,19 @@ Verified against [psd-tools](https://github.com/psd-tools/psd-tools): on fixture
 covering both RLE and ZIP, the parser returns identical layer names, bounds and
 pixel values.
 
+## Selecting several at once
+
+Drag a box on empty space to select everything it touches. Shift+click adds or
+removes one, `Ctrl`/`Cmd`+`A` selects all, `Escape` clears.
+
+With more than one selected, they behave as a block: dragging any of them moves
+the set, the wheel and the **Scale** slider resize it about its centre, arrow
+keys nudge it, `Delete` removes it. Scaling moves positions as well as sizes, so
+the spacing between images is preserved.
+
+**Fit to page** grows or shrinks the selection until it just fits the sheet and
+centres it — the one-click fix if you laid the work out at the wrong paper size.
+
 ## Exporting
 
 | Button | What you get |

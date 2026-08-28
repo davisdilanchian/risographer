@@ -308,6 +308,34 @@ custom ink colour, edited angle/offset and non-default page/lpi/cover/grain/
 paper, ran the snippet, dropped the resulting 110KB file into the new build:
 every field identical.
 
+## v3.7 - multi-select, and moving/scaling as one block
+
+Davis laid a piece out at the wrong paper size and needed the whole arrangement
+resized together.
+
+- Drag a box on empty space to select everything it touches; shift+click adds or
+  removes one; Ctrl/Cmd+A selects all; Escape clears. Selection is a list of
+  item REFERENCES (S.msel), not folder indices, so it survives deletes and
+  spans both plates.
+- With more than one selected, the panel becomes a group panel: a Scale slider,
+  Fit to page, Select all, Deselect, Delete. Dragging any member drags the set,
+  the wheel scales it, arrows nudge it, Delete removes it.
+- Scaling is about the group's bbox centre and scales POSITIONS as well as
+  sizes, so spacing is preserved. The slider measures from the geometry the
+  group had when the panel was built and commits on release (so dragging back
+  and forth doesn't compound).
+- Fit to page: scale the block until it just fits the sheet, then centre it.
+  That's the wrong-paper-size fix in one click.
+- The bbox is rotation-aware (corners, not the upright rect). Also fixed the
+  "off the sheet" counter to use the same test -- it was counting a rotated
+  image's upright rectangle, so a correctly fitted layout still warned.
+
+VERIFIED on Davis's own 13-image rescue file: a real mouse drag across the
+pasteboard selected all 13; the slider at 150% scaled the bbox 8.84x11.59 ->
+13.26x17.38 with every pairwise distance and every width at exactly 1.5x;
+switching to A3 and clicking Fit to page produced a bbox exactly 11.69in wide,
+centred to 0.000 on both axes, with nothing reported off the sheet.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked

@@ -196,6 +196,7 @@ const S = {
   grain: 12,
   active: 0,
   sel: null,
+  msel: [],                  // multi-selection: item objects, not indices
   folders: [
     { name: "BLUE", color: "#0177bd", angle: 45, off: 0,   items: [], peak: 0 },
     { name: "PINK", color: "#ff48b0", angle: 15, off: 0.4, items: [], peak: 0 }
@@ -205,7 +206,7 @@ const S = {
 const MAX_PREVIEW_PX = 2.2e6;      // keeps dragging smooth on any page size
 const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
-let grainTile = null, dragging = null, fast = false;
+let grainTile = null, dragging = null, fast = false, marquee = null;
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const RAD = Math.PI / 180;
@@ -638,24 +639,47 @@ function render() {
   c.lineWidth = Math.max(1, dpi / 90);
   c.strokeRect(m + 0.5, m + 0.5, W - 1, H - 1);
 
-  if (S.sel) {
-    const it = S.folders[S.sel.f].items[S.sel.i];
-    if (it) {
-      const w = it.w * dpi, h = it.h * dpi;
-      c.save();
-      c.translate(m + it.x*dpi + w/2, m + it.y*dpi + h/2);
-      if (it.rot) c.rotate(it.rot * RAD);
-      c.strokeStyle = "#1e90ff";
-      c.lineWidth = Math.max(2, W / 500);
-      c.setLineDash([10, 7]);
-      c.strokeRect(-w/2, -h/2, w, h);
-      c.restore();
-    }
+  const marked = S.msel.length ? S.msel
+    : (S.sel && S.folders[S.sel.f].items[S.sel.i] ? [S.folders[S.sel.f].items[S.sel.i]] : []);
+  for (const it of marked) {
+    const w = it.w * dpi, h = it.h * dpi;
+    c.save();
+    c.translate(m + it.x*dpi + w/2, m + it.y*dpi + h/2);
+    if (it.rot) c.rotate(it.rot * RAD);
+    c.strokeStyle = "#1e90ff";
+    c.lineWidth = Math.max(2, W / 500);
+    c.setLineDash([10, 7]);
+    c.strokeRect(-w/2, -h/2, w, h);
+    c.restore();
+  }
+
+  // one solid box around the whole set, so a group reads as a group
+  if (marked.length > 1) {
+    const b = bboxOf(marked);
+    c.save();
+    c.strokeStyle = "#1e90ff"; c.lineWidth = Math.max(2, W / 600); c.setLineDash([]);
+    c.strokeRect(m + b.x0*dpi, m + b.y0*dpi, b.w*dpi, b.h*dpi);
+    c.restore();
+  }
+
+  if (marquee) {
+    const x = Math.min(marquee.x0, marquee.x1), y = Math.min(marquee.y0, marquee.y1);
+    c.save();
+    c.fillStyle = "rgba(30,144,255,.14)";
+    c.strokeStyle = "#1e90ff"; c.lineWidth = Math.max(1, W / 900); c.setLineDash([6, 5]);
+    c.fillRect(m + x*dpi, m + y*dpi, Math.abs(marquee.x1-marquee.x0)*dpi, Math.abs(marquee.y1-marquee.y0)*dpi);
+    c.strokeRect(m + x*dpi, m + y*dpi, Math.abs(marquee.x1-marquee.x0)*dpi, Math.abs(marquee.y1-marquee.y0)*dpi);
+    c.restore();
   }
 
   const total = S.folders.reduce((a, f) => a + f.items.length, 0);
-  const off = S.folders.reduce((a, f) => a + f.items.filter(i =>
-    i.x < 0 || i.y < 0 || i.x + i.w > S.pageIn.w || i.y + i.h > S.pageIn.h).length, 0);
+  // count what really hangs off, which for a rotated image is its turned
+  // corners, not its upright rectangle -- otherwise a fitted layout cries wolf
+  const off = S.folders.reduce((a, f) => a + f.items.filter(i => {
+    const b = bboxOf([i]);
+    return b.x0 < -1e-6 || b.y0 < -1e-6
+        || b.x1 > S.pageIn.w + 1e-6 || b.y1 > S.pageIn.h + 1e-6;
+  }).length, 0);
   document.getElementById("hint").style.display = total ? "none" : "flex";
   document.getElementById("stat").textContent =
     `${Math.round(performance.now() - t0)} ms · ${dots.toLocaleString()} dots · `
@@ -749,6 +773,8 @@ async function sniffPSD(file) {
 // the only place items are destroyed, so the only place a blob may be released
 function removeItem(fi, i) {
   const it = S.folders[fi].items[i];
+  const k = it ? S.msel.indexOf(it) : -1;
+  if (k >= 0) S.msel.splice(k, 1);
   if (it && it.url) URL.revokeObjectURL(it.url);
   if (it && it.bmp && it.bmp.close) it.bmp.close();
   S.folders[fi].items.splice(i, 1);
@@ -1022,6 +1048,7 @@ function applyProject(m, items) {
     const fm = m.folders && m.folders[i];
     if (fm) { f.name = fm.name; f.color = fm.color; f.angle = fm.angle; f.off = fm.off; }
   });
+  S.msel = [];
   if (m.page) S.pageIn = { w: m.page.w, h: m.page.h };
   if (m.lpi)   S.lpi   = m.lpi;
   if (m.cover) S.cover = m.cover;
@@ -1290,8 +1317,10 @@ function buildFolders() {
 
 function buildSel() {
   const box = document.getElementById("selbox");
+  if (S.msel.length > 1) return buildGroupSel(box);
   const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
-  if (!it) { box.innerHTML = '<div class="empty">Nothing selected. Click an image on the page.</div>'; return; }
+  if (!it) { box.innerHTML = '<div class="empty">Nothing selected. Drag a box on empty space to '
+    + 'select several, or click one image. Shift+click adds and removes.</div>'; return; }
   const eff = Math.round(srcW(srcOf(it)) / it.w);
   box.innerHTML = `
     <label><span>Width</span>
@@ -1358,6 +1387,56 @@ function buildSel() {
   };
 }
 
+// Several images selected: they move and scale as one block, keeping their
+// spacing. Scaling is always measured from the geometry the group had when the
+// panel was built, so dragging the slider back and forth doesn't compound.
+function buildGroupSel(box) {
+  const items = S.msel;
+  const b = bboxOf(items);
+  box.innerHTML = `
+    <div class="note" style="margin:0 0 8px"><b>${items.length} images selected</b>
+      &mdash; ${b.w.toFixed(2)} &times; ${b.h.toFixed(2)} in on the page.
+      They move and scale together.</div>
+    <label><span>Scale</span>
+      <input type="range" id="gs" min="10" max="400" step="1" value="100">
+      <span class="val" id="gsv">100%</span></label>
+    <div class="row" style="margin-top:8px">
+      <button id="gfit">Fit to page</button>
+      <button id="gall">Select all</button>
+      <button id="gnone">Deselect</button>
+      <button id="gdel">Delete</button>
+    </div>
+    <div class="note"><b>Fit to page</b> grows or shrinks the whole selection as
+      one block until it fills the sheet, then centres it &mdash; the fix if you
+      laid the work out at the wrong paper size. Shift+click adds or removes an
+      image; drag a box on empty space to select a region.</div>`;
+
+  let base = snapshot(items), pivot = { x: b.cx, y: b.cy };
+  const gs = document.getElementById("gs");
+  gs.oninput = e => {
+    const k = +e.target.value / 100;
+    document.getElementById("gsv").textContent = e.target.value + "%";
+    scaleGroup(base, k, pivot.x, pivot.y);
+    draw();
+  };
+  gs.onchange = () => {                       // commit: this size is the new 100%
+    base = snapshot(items); const nb = bboxOf(items); pivot = { x: nb.cx, y: nb.cy };
+    gs.value = 100; document.getElementById("gsv").textContent = "100%";
+    buildSel(); draw();
+  };
+  document.getElementById("gfit").onclick = () => { fitGroupToPage(items); buildSel(); draw(); };
+  document.getElementById("gall").onclick = () => {
+    S.msel = everyItem(); buildFolders(); buildSel(); draw(); };
+  document.getElementById("gnone").onclick = () => {
+    S.msel = []; S.sel = null; buildFolders(); buildSel(); draw(); };
+  document.getElementById("gdel").onclick = () => {
+    for (const it of [...items]) S.folders.forEach((f, fi) => {
+      const i = f.items.indexOf(it); if (i >= 0) removeItem(fi, i);
+    });
+    S.msel = []; S.sel = null; buildFolders(); buildSel(); draw();
+  };
+}
+
 /* ==================================================================== pointer */
 // canvas now includes the pasteboard margin, so back it out to page inches
 function toIn(e) {
@@ -1366,6 +1445,55 @@ function toIn(e) {
   return { x: (e.clientX - r.left) / r.width  * (S.pageIn.w + 2*m) - m,
            y: (e.clientY - r.top)  / r.height * (S.pageIn.h + 2*m) - m };
 }
+
+// Bounding box of a set of items, in inches, taking rotation into account so a
+// turned image doesn't stick out of its own selection.
+function bboxOf(items) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const it of items) {
+    const cx = it.x + it.w/2, cy = it.y + it.h/2;
+    const a = (it.rot || 0) * RAD, cs = Math.cos(a), sn = Math.sin(a);
+    for (const [dx, dy] of [[-it.w/2,-it.h/2],[it.w/2,-it.h/2],[it.w/2,it.h/2],[-it.w/2,it.h/2]]) {
+      const x = cx + dx*cs - dy*sn, y = cy + dx*sn + dy*cs;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, cx: (x0+x1)/2, cy: (y0+y1)/2 };
+}
+
+// Scale a group about a fixed point. Positions scale with it, so the whole
+// arrangement grows or shrinks as one block and keeps its spacing.
+function scaleGroup(base, k, cx, cy) {
+  for (const b of base) {
+    b.it.w = clamp(b.w * k, 0.05, 60);
+    b.it.h = b.h * (b.it.w / b.w);
+    b.it.x = cx + (b.x + b.w/2 - cx) * k - b.it.w/2;
+    b.it.y = cy + (b.y + b.h/2 - cy) * k - b.it.h/2;
+  }
+}
+
+const snapshot = items => items.map(it => ({ it, x: it.x, y: it.y, w: it.w, h: it.h }));
+
+// Grow or shrink the selection as one block until it just fits the sheet, then
+// centre it. This is the fix for "I laid it out at the wrong paper size".
+function fitGroupToPage(items, margin = 0) {
+  if (!items.length) return;
+  const b = bboxOf(items);
+  if (!(b.w > 0 && b.h > 0)) return;
+  const k = Math.min((S.pageIn.w - 2*margin) / b.w, (S.pageIn.h - 2*margin) / b.h);
+  scaleGroup(snapshot(items), k, b.cx, b.cy);
+  const nb = bboxOf(items), dx = S.pageIn.w/2 - nb.cx, dy = S.pageIn.h/2 - nb.cy;
+  for (const it of items) { it.x += dx; it.y += dy; }
+}
+
+const inMarquee = (it, m) => {
+  const b = bboxOf([it]);
+  return b.x1 > Math.min(m.x0, m.x1) && b.x0 < Math.max(m.x0, m.x1)
+      && b.y1 > Math.min(m.y0, m.y1) && b.y0 < Math.max(m.y0, m.y1);
+};
+
+const everyItem = () => S.folders.flatMap(f => f.items);
 
 function inside(it, p) {
   const cx = it.x + it.w/2, cy = it.y + it.h/2;
@@ -1385,27 +1513,67 @@ function hit(p) {
 
 cv.addEventListener("pointerdown", e => {
   const p = toIn(e), h = hit(p);
-  S.sel = h;
-  if (h) {
-    const it = S.folders[h.f].items[h.i];
-    dragging = { ...h, ox: p.x - it.x, oy: p.y - it.y };
-    fast = true;
+
+  // empty space: start a box select. Shift keeps what's already selected.
+  if (!h) {
+    if (!e.shiftKey) { S.msel = []; S.sel = null; }
+    marquee = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
     cv.setPointerCapture(e.pointerId);
-    S.active = h.f;
+    buildFolders(); buildSel(); draw();
+    return;
   }
+
+  const it = S.folders[h.f].items[h.i];
+  if (e.shiftKey) {                                  // add to / drop from the set
+    const k = S.msel.indexOf(it);
+    if (k >= 0) S.msel.splice(k, 1); else S.msel.push(it);
+  } else if (!S.msel.includes(it)) {
+    S.msel = [it];                                   // plain click starts fresh
+  }
+  S.sel = S.msel.includes(it) ? h : null;
+  S.active = h.f;
+
+  // dragging any member of the set drags the whole set
+  const moving = S.msel.length ? S.msel : [it];
+  dragging = { items: moving.map(m => ({ it: m, ox: p.x - m.x, oy: p.y - m.y })) };
+  fast = true;
+  cv.setPointerCapture(e.pointerId);
   buildFolders(); buildSel(); draw();
 });
 
 cv.addEventListener("pointermove", e => {
+  const p = toIn(e);
+  if (marquee) { marquee.x1 = p.x; marquee.y1 = p.y; draw(); return; }
   if (!dragging) return;
-  const p = toIn(e), it = S.folders[dragging.f].items[dragging.i];
-  it.x = p.x - dragging.ox; it.y = p.y - dragging.oy;
+  for (const d of dragging.items) { d.it.x = p.x - d.ox; d.it.y = p.y - d.oy; }
   draw();
 });
 
-addEventListener("pointerup", () => { if (dragging) { dragging = null; fast = false; draw(); } });
+addEventListener("pointerup", () => {
+  if (marquee) {
+    const m = marquee; marquee = null;
+    if (Math.abs(m.x1 - m.x0) > 0.02 || Math.abs(m.y1 - m.y0) > 0.02) {
+      for (const it of everyItem())
+        if (inMarquee(it, m) && !S.msel.includes(it)) S.msel.push(it);
+      const first = S.msel[0];
+      S.sel = null;
+      S.folders.forEach((f, fi) => { const i = f.items.indexOf(first);
+        if (i >= 0) S.sel = { f: fi, i }; });
+    }
+    buildFolders(); buildSel(); draw();
+    return;
+  }
+  if (dragging) { dragging = null; fast = false; buildSel(); draw(); }
+});
 
 cv.addEventListener("wheel", e => {
+  if (S.msel.length > 1) {                    // scale the block about its centre
+    e.preventDefault();
+    const b = bboxOf(S.msel);
+    scaleGroup(snapshot(S.msel), e.deltaY < 0 ? 1.06 : 1/1.06, b.cx, b.cy);
+    buildSel(); draw();
+    return;
+  }
   const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
   if (!it) return;
   e.preventDefault();
@@ -1422,6 +1590,33 @@ cv.addEventListener("wheel", e => {
 
 addEventListener("keydown", e => {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+    e.preventDefault();
+    S.msel = everyItem();
+    if (S.msel.length) { S.sel = { f: 0, i: 0 }; S.active = 0; }
+    buildFolders(); buildSel(); draw(); return;
+  }
+  if (e.key === "Escape") { S.msel = []; S.sel = null; buildFolders(); buildSel(); draw(); return; }
+
+  if (S.msel.length > 1) {                    // the whole block responds
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      for (const m of [...S.msel]) S.folders.forEach((f, fi) => {
+        const i = f.items.indexOf(m); if (i >= 0) removeItem(fi, i);
+      });
+      S.msel = []; S.sel = null; buildFolders(); buildSel(); draw(); return;
+    }
+    if (e.key.startsWith("Arrow")) {
+      e.preventDefault();
+      const d = (e.shiftKey ? 10 : 1) / 96;
+      const dx = e.key === "ArrowLeft" ? -d : e.key === "ArrowRight" ? d : 0;
+      const dy = e.key === "ArrowUp"   ? -d : e.key === "ArrowDown"  ? d : 0;
+      for (const m of S.msel) { m.x += dx; m.y += dy; }
+      draw(); return;
+    }
+  }
+
   const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
   if (!it) return;
   if (e.key === "Delete" || e.key === "Backspace") {
