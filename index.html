@@ -222,6 +222,29 @@ function makeGrain() {
 }
 
 /* ================================================================ density map */
+// Inverted copies are built once and cached on the item. Note that under the
+// "white is nothing" model, inverting a photo turns its white background into
+// solid ink -- that's correct, and usually the point.
+function imgFor(it) {
+  if (!it.inv) return it.img;
+  if (!it._inv) {
+    const c = document.createElement("canvas");
+    c.width = it.img.naturalWidth; c.height = it.img.naturalHeight;
+    const g = c.getContext("2d");
+    if ("filter" in g) { g.filter = "invert(1)"; g.drawImage(it.img, 0, 0); }
+    else {
+      g.drawImage(it.img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height);
+      for (let i = 0; i < d.data.length; i += 4) {
+        d.data[i] = 255 - d.data[i]; d.data[i+1] = 255 - d.data[i+1]; d.data[i+2] = 255 - d.data[i+2];
+      }
+      g.putImageData(d, 0, 0);
+    }
+    it._inv = c;
+  }
+  return it._inv;
+}
+
 // A folder is ONE ink plate, so its images combine the way ink on one plate
 // does, not the way stacked pictures do:
 //   * white is nothing. It must not erase artwork underneath it, so images are
@@ -244,7 +267,7 @@ function densityOf(folder, dpi, W, H) {
     g.save();
     g.translate(it.x * dpi + w/2, it.y * dpi + h/2);
     if (it.rot) g.rotate(it.rot * RAD);
-    g.drawImage(it.img, -w/2, -h/2, w, h);
+    g.drawImage(imgFor(it), -w/2, -h/2, w, h);
     g.restore();
   }
   g.globalCompositeOperation = "source-over";
@@ -336,7 +359,7 @@ function plateCanvas(folder, dpi, W, H, cell, color) {
 let uid = 0;
 function folderKey(f, dpi, cell) {
   return [dpi, cell, S.cover, f.angle, f.color, fast, W_H_KEY,
-    ...f.items.map(i => `${i.id}:${i.x.toFixed(3)},${i.y.toFixed(3)},${i.w.toFixed(3)},${i.h.toFixed(3)},${i.rot|0}`)
+    ...f.items.map(i => `${i.id}:${i.x.toFixed(3)},${i.y.toFixed(3)},${i.w.toFixed(3)},${i.h.toFixed(3)},${i.rot|0},${i.inv?1:0}`)
   ].join("|");
 }
 let W_H_KEY = "";
@@ -412,7 +435,7 @@ function render() {
     c.save();
     c.translate(m + it.x*dpi + w/2, m + it.y*dpi + h/2);
     if (it.rot) c.rotate(it.rot * RAD);
-    c.drawImage(it.img, -w/2, -h/2, w, h);
+    c.drawImage(imgFor(it), -w/2, -h/2, w, h);
     c.restore();
   }
   c.restore();
@@ -483,7 +506,7 @@ function addImage(img, folderIndex, cxIn, cyIn) {
   const wIn = S.pageIn.w * 0.6;
   const hIn = wIn * (img.naturalHeight / img.naturalWidth);
   const it = {
-    img, w: wIn, h: hIn, rot: 0, id: ++uid,
+    img, w: wIn, h: hIn, rot: 0, inv: false, id: ++uid,
     x: (cxIn ?? S.pageIn.w/2) - wIn/2,
     y: (cyIn ?? S.pageIn.h/2) - hIn/2
   };
@@ -935,6 +958,7 @@ function buildSel() {
       <span class="val" id="rtv">${it.rot|0}&deg;</span></label>
     <div class="row" style="margin-top:8px">
       <button id="rt0">0&deg;</button>
+      <button id="inv"${it.inv ? ' style="background:var(--acc);border-color:var(--acc);color:#1c1c1f;font-weight:600"' : ''}>Invert</button>
       <button id="fit">Fit page</button>
       <button id="mv">To ${S.folders[1 - S.sel.f].name}</button>
       <button id="del">Delete</button>
@@ -956,6 +980,7 @@ function buildSel() {
     document.getElementById("rtv").textContent = it.rot + "°"; draw();
   };
   document.getElementById("rt0").onclick = () => { it.rot = 0; buildSel(); draw(); };
+  document.getElementById("inv").onclick = () => { it.inv = !it.inv; buildSel(); draw(); };
   document.getElementById("fit").onclick = () => {
     const ar = it.h / it.w;
     if (S.pageIn.w * ar <= S.pageIn.h) { it.w = S.pageIn.w; it.h = it.w * ar; }

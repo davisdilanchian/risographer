@@ -100,6 +100,27 @@ folder's own geometry + screen settings (items carry a stable id), and dropped
 preview resolution ~3.5x while dragging since density rasterisation is the real
 cost and `fast` sampling doesn't touch it. Drag is now 30-60 ms/frame.
 
+## v3.2 (2026-08-27) - ink model, pasteboard, invert
+- A folder is ONE plate, so its images now composite with "darken" over a white
+  ground instead of source-over. Fixes two things Davis reported: white areas
+  were ERASING artwork under them on the same plate, and nothing stopped one ink
+  doubling up on itself. Different inks still multiply between plates.
+  Measured: same-ink overlap 0.469 vs 0.471 alone; white-over-ink keeps 0.469
+  where it used to erase to 0; cross-ink [156,145,188] vs predicted
+  blue*pink/paper [158,145,188].
+- 1.25in pasteboard around the sheet. Off-sheet artwork shows as an un-halftoned
+  ghost (clipped to outside the sheet so it never dims real artwork), stays
+  clickable/draggable, and the status line counts it. Exports remain page-only,
+  verified 2550x3300 with paper in the corner.
+- Per-item Invert. Inverted copy built once and cached on the item; folder cache
+  key includes the flag. Measured 0.809 -> 0.227 on the subject, 0 -> 0.934 on
+  the background.
+
+CAUTION for future sessions: do NOT sample single pixels to check colour in this
+app -- it's a halftone, so a single pixel usually lands between dots. An earlier
+check "proved" cross-ink multiply was broken when it was fine. Always average
+over a region.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked

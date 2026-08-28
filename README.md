@@ -37,6 +37,11 @@ way stacked pictures do.
   subtractive overprint. (Measured overlap `[156,145,188]` against a predicted
   `blue×pink/paper` of `[158,145,188]`.)
 
+**Invert** flips an individual image. Worth knowing what that means here: since
+white is nothing, inverting a photo turns its white background into *solid ink*.
+That's usually the point — it's how you get a dense field with the subject
+knocked out of it — but keep an eye on the peak-ink readout when you do it.
+
 ## Off the sheet
 
 There's a working margin around the page. Anything hanging off it still exists
@@ -55,6 +60,7 @@ currently off the sheet. Exports only ever contain the sheet itself.
 | Move | drag |
 | Resize | scroll, or the Width field (in inches) |
 | Rotate | `Shift`+scroll, `,` / `.` keys (`Shift` = 15°), or the Rotate slider |
+| Invert | the **Invert** button on the selected image |
 | Nudge | arrow keys (`Shift` = 10×) |
 | Delete | `Delete` / `Backspace` |
 | Switch ink | the "To PINK" / "To BLUE" button |
