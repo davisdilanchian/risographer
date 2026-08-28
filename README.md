@@ -22,6 +22,28 @@ exactly like turning a sheet under a press.
 It also means the effect is genuinely automatic. The screen doesn't care what you
 drop in or where you put it. There is nothing to re-apply, ever.
 
+## How ink combines
+
+A folder is one **ink plate**, so its images combine the way ink does, not the
+way stacked pictures do.
+
+- **White is nothing.** A white background never erases artwork underneath it on
+  the same plate. Images composite with `darken` over a white ground rather than
+  painting over each other.
+- **The same ink doesn't multiply with itself.** Two images overlapping on one
+  plate take the denser of the two — one pass of one ink physically can't print
+  itself twice. (Measured: 0.471 coverage alone, 0.469 in the overlap.)
+- **Different inks do multiply.** Where the two plates cross you get real
+  subtractive overprint. (Measured overlap `[156,145,188]` against a predicted
+  `blue×pink/paper` of `[158,145,188]`.)
+
+## Off the sheet
+
+There's a working margin around the page. Anything hanging off it still exists
+and is shown as a ghost out there — un-halftoned, because it isn't going to
+print — and you can click and drag it back on. The status line counts what's
+currently off the sheet. Exports only ever contain the sheet itself.
+
 ## Using it
 
 1. Click a folder in the sidebar to make it active.

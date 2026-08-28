@@ -76,7 +76,10 @@
   <h1>Risographer</h1>
   <div class="sub">Drop images (or a .psd) into a folder. The halftone screen is
     fixed to the page, not the image &mdash; move things around and they slide
-    through it.</div>
+    through it.<br><br>
+    White is nothing, so images on the same ink overlap without darkening.
+    The two inks multiply where they cross. Anything off the sheet shows as a
+    ghost in the margin so you can drag it back.</div>
 
   <div id="folders"></div>
 
@@ -219,10 +222,23 @@ function makeGrain() {
 }
 
 /* ================================================================ density map */
+// A folder is ONE ink plate, so its images combine the way ink on one plate
+// does, not the way stacked pictures do:
+//   * white is nothing. It must not erase artwork underneath it, so images are
+//     composited with "darken" over a white ground rather than source-over.
+//   * two images on the SAME plate don't multiply where they overlap -- one pass
+//     of one ink can't print itself twice. "darken" takes the denser of the two,
+//     which is exactly a single plate's density at that point.
+// Different inks DO multiply, but that happens later, between plates.
 function densityOf(folder, dpi, W, H) {
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
   const g = c.getContext("2d", { willReadFrequently: true });
+
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = "darken";
+
   for (const it of folder.items) {
     const w = it.w * dpi, h = it.h * dpi;
     g.save();
@@ -231,13 +247,13 @@ function densityOf(folder, dpi, W, H) {
     g.drawImage(it.img, -w/2, -h/2, w, h);
     g.restore();
   }
+  g.globalCompositeOperation = "source-over";
+
   const px = g.getImageData(0, 0, W, H).data;
   const den = new Float32Array(W * H);
   for (let i = 0, p = 0; i < den.length; i++, p += 4) {
-    const a = px[p + 3] / 255;
-    if (a === 0) continue;
     const lum = (0.2126 * px[p] + 0.7152 * px[p+1] + 0.0722 * px[p+2]) / 255;
-    den[i] = (1 - lum) * a;
+    den[i] = 1 - lum;                       // white ground -> exactly 0, no ink
   }
   return den;
 }
@@ -361,12 +377,58 @@ function renderPage(dpi, target, withSel, useCache) {
     c.restore();
   }
 
-  if (withSel && S.sel) {
+  return dots;
+}
+
+// Working area around the page. Anything hanging off the sheet still exists and
+// can be dragged back on, so it's shown as a ghost out here -- un-halftoned,
+// because it isn't going to print.
+const PASTEBOARD_IN = 1.25;
+let pageBuf = null;
+
+function render() {
+  const t0 = performance.now();
+  const dpi = previewDpi();
+  const { W, H } = geom(dpi);
+  const m = Math.round(PASTEBOARD_IN * dpi);
+
+  if (!pageBuf) pageBuf = document.createElement("canvas");
+  const dots = renderPage(dpi, pageBuf, false, true);
+
+  cv.width = W + 2*m; cv.height = H + 2*m;
+  const c = cv.getContext("2d");
+  c.fillStyle = "#141416";
+  c.fillRect(0, 0, cv.width, cv.height);
+
+  // ghosts, clipped to OUTSIDE the sheet so they never dim the real artwork
+  c.save();
+  c.beginPath();
+  c.rect(0, 0, cv.width, cv.height);
+  c.rect(m, m, W, H);
+  c.clip("evenodd");
+  c.globalAlpha = 0.34;
+  for (const f of S.folders) for (const it of f.items) {
+    const w = it.w * dpi, h = it.h * dpi;
+    c.save();
+    c.translate(m + it.x*dpi + w/2, m + it.y*dpi + h/2);
+    if (it.rot) c.rotate(it.rot * RAD);
+    c.drawImage(it.img, -w/2, -h/2, w, h);
+    c.restore();
+  }
+  c.restore();
+
+  c.drawImage(pageBuf, m, m);
+
+  c.strokeStyle = "rgba(255,255,255,.4)";
+  c.lineWidth = Math.max(1, dpi / 90);
+  c.strokeRect(m + 0.5, m + 0.5, W - 1, H - 1);
+
+  if (S.sel) {
     const it = S.folders[S.sel.f].items[S.sel.i];
     if (it) {
       const w = it.w * dpi, h = it.h * dpi;
       c.save();
-      c.translate(it.x * dpi + w/2, it.y * dpi + h/2);
+      c.translate(m + it.x*dpi + w/2, m + it.y*dpi + h/2);
       if (it.rot) c.rotate(it.rot * RAD);
       c.strokeStyle = "#1e90ff";
       c.lineWidth = Math.max(2, W / 500);
@@ -375,18 +437,15 @@ function renderPage(dpi, target, withSel, useCache) {
       c.restore();
     }
   }
-  return dots;
-}
 
-function render() {
-  const t0 = performance.now();
-  const dpi = previewDpi();
-  const dots = renderPage(dpi, cv, true, true);
   const total = S.folders.reduce((a, f) => a + f.items.length, 0);
+  const off = S.folders.reduce((a, f) => a + f.items.filter(i =>
+    i.x < 0 || i.y < 0 || i.x + i.w > S.pageIn.w || i.y + i.h > S.pageIn.h).length, 0);
   document.getElementById("hint").style.display = total ? "none" : "flex";
   document.getElementById("stat").textContent =
     `${Math.round(performance.now() - t0)} ms · ${dots.toLocaleString()} dots · `
-    + `preview ${Math.round(dpi)} dpi` + (fast ? " · fast" : "");
+    + `preview ${Math.round(dpi)} dpi` + (fast ? " · fast" : "")
+    + (off ? ` · ${off} off the sheet` : "");
   updatePeaks(); updatePxNote();
 }
 
@@ -918,10 +977,12 @@ function buildSel() {
 }
 
 /* ==================================================================== pointer */
+// canvas now includes the pasteboard margin, so back it out to page inches
 function toIn(e) {
   const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / r.width  * S.pageIn.w,
-           y: (e.clientY - r.top)  / r.height * S.pageIn.h };
+  const m = PASTEBOARD_IN;
+  return { x: (e.clientX - r.left) / r.width  * (S.pageIn.w + 2*m) - m,
+           y: (e.clientY - r.top)  / r.height * (S.pageIn.h + 2*m) - m };
 }
 
 function inside(it, p) {
