@@ -155,7 +155,38 @@ pixel values.
 |---|---|
 | **PNG** | Flat composite for screen. |
 | **PSD** | Layered: `PAPER`, one Multiply layer per ink, and `PAPER GRAIN` at Overlay. Opens in Photoshop, Photopea or Affinity. |
-| **Plates** | One black-on-white PNG per ink — what a print shop actually wants. Same canvas size, same positioning. |
+| **Plates** | One **greyscale, un-halftoned** PNG per ink — black is full ink, white is bare paper. This is what a riso shop wants: their RIP lays its own screen, and pre-dotted art moirés against it. |
+| **Screened** | The same plates with our halftone applied, for a shop that asks for pre-screened film. |
+| **Save project** | A `.psd` you can drop back in to carry on working — see below. |
+
+Plates bake in everything that belongs to the **artwork** — tone, invert, mask
+knockouts, and the same darken model a single plate prints with — and nothing
+that belongs to the **screen**: no dots, no angle, and no misregistration offset,
+since plates have to be registered. The **Ink limit** does apply, so the file
+carries the same coverage the preview shows; a 100% black source comes out at
+80% grey by default.
+
+Verified on a 255/192/128/0 grey ramp at the default 80% limit: the plate reads
+255/205/153/51, neutral in all three channels, with pure white paper outside the
+artwork.
+
+## Save and resume
+
+**Save project** writes a `.psd` that is a save file rather than artwork: every
+image in greyscale at its place on the page with *nothing* applied — no halftone,
+no ink colour, no tone, invert or mask — plus the screen and page settings. Drop
+it back in, here or in another session, and everything comes back: page size,
+dot pitch, ink limit, grain, paper, each folder's colour, angle and offset, and
+each image's position, size, rotation, tone, invert and mask flags.
+
+Rotation is stored as a number rather than baked into the pixels, so it stays
+editable and never resamples — which means a rotated image looks unrotated if you
+open the file in Photoshop. Off-sheet artwork survives too: PSD allows layer
+bounds outside the canvas, so a pasteboard image comes back on the pasteboard.
+
+The settings ride in an image resource (`4001`, the plug-in range, so Photoshop
+keeps it on a re-save) and a tag on each layer name. Dropping any *other* `.psd`
+still imports each layer as a fresh draggable image, exactly as before.
 
 The PSD writer was verified against [psd-tools](https://github.com/psd-tools/psd-tools):
 re-rendering the layer stack and diffing it against the stored composite gives a

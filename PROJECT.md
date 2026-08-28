@@ -240,6 +240,55 @@ half an 8-bit level is now clamped to 0. Sparse full sheet at 300dpi: 134ms ->
 255/220/180/128/64/0 (0.0536 / 0.1183 / 0.1926 / 0.2765 / 0.3867 / 0.5562), so
 the ink model is untouched.
 
+## v3.6 (2026-08-28) - plates that a print shop can actually use, and save/resume
+
+Davis, on the PSD export: "what I wanted was a psd that contained all the images
+in their spots in greyscale but without the effects applied, so I can save and
+resume progress in another session." And: "let me export the plates as greyscale
+images without any of our halftone effects -- this is a tool for outputting
+usable templates for risograph printing."
+
+Two different files, so two separate things:
+
+- **Plates** now export CONTINUOUS-TONE GREYSCALE, one PNG per ink, no screen.
+  That is what a riso RIP wants; handing it pre-dotted art moires against the
+  printer's own screen. Artwork decisions are baked in (tone, invert, mask
+  knockouts, the darken model); screen decisions are not (no dots, no angle, and
+  no misregistration -- plates must register). The ink limit DOES apply so the
+  file matches the preview's coverage.
+  Verified on a 255/192/128/0 ramp at 80% limit: plate reads 255/205/153/51,
+  R=G=B everywhere, paper margin pure 255, one distinct value over a flat patch
+  (vs 250 for the screened version, whose mean ink matches to 0.02).
+  The old behaviour is still there as a second button, "Screened".
+
+- **Save project** writes a .psd that is a SAVE FILE, not artwork: each image in
+  greyscale at its page rect with nothing applied, plus the session settings.
+  Settings live in image resource 4001 (plug-in range, so Photoshop keeps it on
+  a re-save); per-image flags live in a tag appended to each layer name,
+  `[riso f0 r15 t25 i1 m0]`. Dropping it back in restores the session instead of
+  importing layers as new artwork.
+  Rotation is stored as a NUMBER, not baked into pixels -- resume keeps the
+  slider live and never resamples, at the cost of a rotated image looking
+  unrotated if opened in Photoshop. Off-sheet items survive as negative layer
+  bounds, which PSD allows and our parser already handled.
+  Verified: a session with a rotated + toned item, an inverted item, an off-sheet
+  masked item, non-default page/lpi/cover/grain/paper/dpi and edited folder
+  colours came back byte-identical in every one of those fields, and the render
+  matched to within 0.005 mean ink. psd-tools reads the file independently:
+  correct bounds, greyscale layers, layer min 0.259 = the untouched source luma
+  (so no invert/tone baked in), and the JSON resource parses.
+  A .psd that is NOT ours still adds its layers to the current session and
+  leaves the settings alone (verified: 1 item -> 3, lpi and page untouched).
+
+buildPSD grew per-layer rects (it assumed every layer covered the canvas) and an
+optional metadata resource. The print PSD export is unchanged -- re-verified with
+psd-tools: 4 layers, PAPER/BLUE/PINK/PAPER GRAIN, normal/multiply/multiply/
+overlay, grain opacity 31.
+
+CAUGHT IN REVIEW: the v3.5 commit accidentally duplicated a line into docToPSD
+(a Python replace hit both matches), which would have thrown ReferenceError on
+every PSD export. Fixed here before it shipped.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked
