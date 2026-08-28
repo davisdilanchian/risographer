@@ -289,6 +289,25 @@ CAUGHT IN REVIEW: the v3.5 commit accidentally duplicated a line into docToPSD
 (a Python replace hit both matches), which would have thrown ReferenceError on
 every PSD export. Fixed here before it shipped.
 
+## v3.6b - rescuing a session from a build with no save button
+
+Davis had work open in the old build and no way to keep it. Two things, so this
+never costs anyone their layout again:
+
+- A console snippet (in the README) that reads `window.__riso.S` on the OLD tab
+  and downloads `riso-rescue.json`: every image's pixels as a data URL, its
+  position/size/rotation/tone/invert/mask and folder, plus page and screen
+  settings. Needs nothing from the new build and no reload.
+- The new build accepts that JSON on drop, sniffed by contents, and restores it
+  through the same applyProject() path the project PSD uses. restoreProject was
+  split so both formats share one restore.
+
+VERIFIED end to end against the actual v3.4 build (git show ee38039:index.html):
+built a session there with a rotated + toned item, an inverted + masked item, a
+custom ink colour, edited angle/offset and non-default page/lpi/cover/grain/
+paper, ran the snippet, dropped the resulting 110KB file into the new build:
+every field identical.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked

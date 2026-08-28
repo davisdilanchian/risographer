@@ -726,6 +726,17 @@ function adoptPixels(it) {
   }).catch(() => {});                                   // keep using the <img>
 }
 
+// Rescue files are matched the same way as PSDs -- by what's inside, not the
+// name, since a JSON saved from a console often arrives with an odd extension.
+async function sniffJSON(file) {
+  if (file.size > 200e6) return false;
+  try {
+    const head = await file.slice(0, 64).text();
+    return head.trimStart().startsWith("{") && /risographer|\"items\"/.test(head)
+        || /\.json$/i.test(file.name) && head.trimStart().startsWith("{");
+  } catch { return false; }
+}
+
 // Sniff the actual file signature. Filenames lie: a PSD saved from a browser or
 // a chat app often arrives with no extension at all and an empty MIME type.
 async function sniffPSD(file) {
@@ -748,6 +759,7 @@ function loadFiles(files, cx, cy) {
     const ox = (cx ?? S.pageIn.w/2) + k*0.18, oy = (cy ?? S.pageIn.h/2) + k*0.18;
 
     if (await sniffPSD(file)) { importPSD(file, ox, oy); return; }
+    if (await sniffJSON(file)) { importRescue(file); return; }
 
     if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i.test(file.name)) {
       const img = new Image();
@@ -982,7 +994,22 @@ async function parsePSDLayers(buf) {
 // dropping the layers in as fresh artwork.
 function restoreProject(doc) {
   const m = doc.meta, dpi = m.dpi || doc.dpi || 300;
+  const items = doc.layers.map((L, n) => {
+    const t = TAG.exec(L.name), p = {};
+    if (t) for (const kv of t[1].split(/\s+/)) p[kv[0]] = +kv.slice(1);
+    return {
+      src: L.canvas.toDataURL(), name: t ? L.name.replace(TAG, "") : L.name,
+      f: p.f | 0,                                   // page px -> inches, as saved
+      x: L.x / dpi, y: L.y / dpi, w: L.w / dpi, h: L.h / dpi,
+      rot: p.r || 0, tone: p.t || 0, inv: p.i === 1, mask: p.m === 1
+    };
+  });
+  applyProject(m, items);
+}
 
+// Both project formats land here: the .psd, and the .json a rescue snippet
+// writes out of an older build that has no save button.
+function applyProject(m, items) {
   if (S.folders.some(f => f.items.length)
       && !confirm("Open this project? It replaces what's on the page.")) {
     document.body.classList.remove("busy");
@@ -1003,28 +1030,40 @@ function restoreProject(doc) {
   if ([150, 300, 600].includes(m.dpi)) S.dpi = m.dpi;
   S.sel = null;
 
-  let pending = doc.layers.length;
+  let pending = items.length || 1;
   const done = () => {
     if (--pending) return;
     document.body.classList.remove("busy");
     syncControls(); buildFolders(); buildSel(); draw();
   };
-  doc.layers.forEach((L, n) => {
-    const t = TAG.exec(L.name);
-    const p = {};
-    if (t) for (const kv of t[1].split(/\s+/)) p[kv[0]] = +kv.slice(1);
+  if (!items.length) { done(); return; }
+  items.forEach(L => {
     const img = new Image();
     img.onload = () => {
-      const it = addImage(img, clamp(p.f | 0, 0, S.folders.length - 1));
-      it.name = t ? L.name.replace(TAG, "") : L.name;
-      it.x = L.x / dpi; it.y = L.y / dpi;            // page px -> inches, as saved
-      it.w = L.w / dpi; it.h = L.h / dpi;
-      it.rot = p.r || 0; it.tone = p.t || 0;
-      it.inv = p.i === 1; it.opaque = p.m === 1;
+      const it = addImage(img, clamp(L.f | 0, 0, S.folders.length - 1));
+      it.name = L.name;
+      it.x = L.x; it.y = L.y; it.w = L.w; it.h = L.h;
+      it.rot = L.rot || 0; it.tone = L.tone || 0;
+      it.inv = !!L.inv; it.opaque = !!L.mask;
       done();
     };
     img.onerror = done;
-    img.src = L.canvas.toDataURL();
+    img.src = L.src;
+  });
+}
+
+// A rescue file: JSON written by the console snippet in the README, for pulling
+// a session out of a build that predates the save button. Same shape as the
+// project PSD's settings, with each image as a data URL and geometry in inches.
+function importRescue(file) {
+  document.body.classList.add("busy");
+  file.text().then(txt => {
+    const j = JSON.parse(txt);
+    if (!j.risographer) throw new Error("That JSON isn't a Risographer rescue file.");
+    applyProject(j, j.items || []);
+  }).catch(e => {
+    document.body.classList.remove("busy");
+    alert("Couldn't open " + file.name + "\n\n" + e.message);
   });
 }
 

@@ -188,6 +188,60 @@ The settings ride in an image resource (`4001`, the plug-in range, so Photoshop
 keeps it on a re-save) and a tag on each layer name. Dropping any *other* `.psd`
 still imports each layer as a fresh draggable image, exactly as before.
 
+### Rescuing a session from an older build
+
+If you have work open in a build from before the save button existed, you can
+still get it out — **without reloading the tab**. Open the browser console on
+that tab (F12, or Cmd+Option+J on a Mac; Chrome may ask you to type
+`allow pasting` first), paste this, and press Enter. It downloads
+`riso-rescue.json`:
+
+```js
+(() => {
+  const S = window.__riso && window.__riso.S;
+  if (!S) return alert("This page isn't Risographer, or is too old to rescue.");
+  const MAX = 6600, out = [], fails = [];
+  S.folders.forEach((f, fi) => f.items.forEach(it => out.push({ it, fi })));
+  out.sort((a, b) => a.it.id - b.it.id);
+  const items = out.map(({ it, fi }, n) => {
+    const im = it.img, sc = Math.min(1, MAX / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(im.naturalWidth * sc); c.height = Math.round(im.naturalHeight * sc);
+    let src = "";
+    try { c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); src = c.toDataURL("image/png"); }
+    catch (e) { fails.push(it.name || "image " + (n + 1)); return null; }
+    return { name: it.name || "image " + (n + 1), f: fi,
+             x: it.x, y: it.y, w: it.w, h: it.h,
+             rot: it.rot || 0, tone: it.tone || 0, inv: !!it.inv, mask: !!it.opaque, src };
+  }).filter(Boolean);
+  const j = { risographer: 1, dpi: S.dpi, page: { w: S.pageIn.w, h: S.pageIn.h },
+    lpi: S.lpi, cover: S.cover, grain: S.grain, paper: S.paper,
+    folders: S.folders.map(f => ({ name: f.name, color: f.color, angle: f.angle, off: f.off })),
+    items };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(j)], { type: "application/json" }));
+  a.download = "riso-rescue.json"; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  console.log(`saved ${items.length} image(s)` + (fails.length ? ` -- FAILED: ${fails.join(", ")}` : ""));
+})();
+```
+
+Then refresh to the current version and **drop `riso-rescue.json` onto the page**
+— it restores the same way a project file does. Rescue files are recognised by
+their contents, so the name doesn't matter.
+
+It reads the live session out of `window.__riso.S`, so it needs the tab still
+open on the old build; it saves each image's original pixels (capped at 6600px
+on the long edge), positions, folder, rotation, tone, invert and mask, plus the
+page and screen settings. It reports in the console if any image can't be read
+(a cross-origin image taints the canvas — that only affects art loaded from a
+URL, not anything dropped or pasted in).
+
+Verified end to end against the v3.4 build: a session with a rotated and toned
+image, an inverted and masked one, a custom ink colour, edited angle and offset,
+and non-default page, pitch, ink limit, grain and paper came back identical in
+every field.
+
 The PSD writer was verified against [psd-tools](https://github.com/psd-tools/psd-tools):
 re-rendering the layer stack and diffing it against the stored composite gives a
 maximum difference of **0** across the whole page.
