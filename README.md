@@ -89,6 +89,8 @@ Drop a `.psd` on the page and **each layer comes in as its own draggable image**
 keeping its position relative to the others. Move them apart, put them in
 different ink folders, rotate them independently.
 
+- Files are identified by their actual signature, not their name — a PSD that
+  arrives with no extension and no MIME type still imports
 - Raw, PackBits (RLE) and **ZIP**-compressed layer data — modern Photoshop uses
   ZIP, so this matters
 - Layer groups and hidden layers are skipped; adjustment layers (no pixels) too
@@ -148,8 +150,10 @@ slightly heavy. That bias is dot gain, which is what real riso does anyway.
 ## Notes
 
 - Everything runs locally. No image ever leaves your machine.
-- A Letter-size page renders in roughly 50–70 ms, so dragging stays smooth. While
-  you drag it samples more coarsely and sharpens up on release.
+- Each ink folder's plate is cached, so dragging only rebuilds the folder you're
+  actually touching. While you drag it also works at a lower resolution, then
+  renders at full quality on release. A 9-layer Letter page drags at ~30–60 ms a
+  frame and settles in ~130 ms.
 - `window.__riso` is exposed for scripting and debugging.
 
 ## Licence

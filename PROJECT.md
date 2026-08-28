@@ -80,8 +80,29 @@ v1 shipped and verified live.
   pixel means.
 - PSD export now writes resource 1005 so Photoshop opens it at the right size.
 
+## v3.1 (2026-08-27) - real-world PSD bug
+Davis dragged in Downloads\psd and nothing happened. Two bugs:
+1. PSD detection was by filename + MIME. His file was literally named "psd"
+   with NO extension and an empty MIME type, so it matched neither branch.
+   Now sniffs the 8BPS magic bytes instead.
+2. WORSE: any dropped file matching neither branch was silently discarded - no
+   error at all, which reads as "the app is broken". Now every unusable drop
+   reports what it was and what's supported, and decode errors surface too.
+
+The file itself was a valid 792x1224 8-bit RGB PSD. Parser handles it: all 9
+pixel layers in 95 ms, bounds matching psd-tools exactly (including one layer
+extending past the canvas at x=444 w=395, another at y=-1); adjustment and
+empty type layers correctly skipped.
+
+Also fixed the performance this exposed: 9 layers took 193 ms/frame because
+every render rebuilt BOTH folders. Added a per-folder plate cache keyed on that
+folder's own geometry + screen settings (items carry a stable id), and dropped
+preview resolution ~3.5x while dragging since density rasterisation is the real
+cost and `fast` sampling doesn't touch it. Drag is now 30-60 ms/frame.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
+- Layer MASKS are parsed past but not applied - a masked layer imports unmasked
 
 ## Future goals
 - More than two folders (three-ink riso, 75° screen angle is already reserved)
