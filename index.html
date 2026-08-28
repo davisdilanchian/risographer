@@ -225,30 +225,57 @@ function makeGrain() {
 // Inverted copies are built once and cached on the item. Note that under the
 // "white is nothing" model, inverting a photo turns its white background into
 // solid ink -- that's correct, and usually the point.
+// cap any derived copy: a 50MP source held as a second full-res canvas is a lot
+// of memory for no visible gain at 600dpi and under
+const MAXPX = 3200;
+function derivedCanvas(img) {
+  const sc = Math.min(1, MAXPX / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement("canvas");
+  c.width  = Math.max(1, Math.round(img.naturalWidth  * sc));
+  c.height = Math.max(1, Math.round(img.naturalHeight * sc));
+  return c;
+}
+
+// Invert and per-image tone, baked into one cached copy.
+// tone > 0 darkens (more ink), tone < 0 lightens (less ink), via a gamma on
+// each channel so colour survives and luminance -- which is what becomes ink --
+// follows it.
 function imgFor(it) {
-  if (!it.inv) return it.img;
-  if (!it._inv) {
-    // cap the copy: a 50MP source held as a second full-res canvas is a lot of
-    // memory for no visible gain at 600dpi and under
-    const MAXPX = 3200;
-    const sc = Math.min(1, MAXPX / Math.max(it.img.naturalWidth, it.img.naturalHeight));
-    const w = Math.max(1, Math.round(it.img.naturalWidth * sc));
-    const h = Math.max(1, Math.round(it.img.naturalHeight * sc));
-    const c = document.createElement("canvas");
-    c.width = w; c.height = h;
-    const g = c.getContext("2d");
-    if ("filter" in g) { g.filter = "invert(1)"; g.drawImage(it.img, 0, 0, w, h); }
-    else {
-      g.drawImage(it.img, 0, 0, w, h);
-      const d = g.getImageData(0, 0, w, h);
-      for (let i = 0; i < d.data.length; i += 4) {
-        d.data[i] = 255 - d.data[i]; d.data[i+1] = 255 - d.data[i+1]; d.data[i+2] = 255 - d.data[i+2];
-      }
-      g.putImageData(d, 0, 0);
-    }
-    it._inv = c;
+  const tone = it.tone | 0, inv = !!it.inv;
+  if (!tone && !inv) return it.img;
+
+  const key = tone + "|" + (inv ? 1 : 0);
+  if (it._pk === key && it._pc) return it._pc;
+
+  const c = derivedCanvas(it.img), g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(it.img, 0, 0, c.width, c.height);
+  const id = g.getImageData(0, 0, c.width, c.height), d = id.data;
+  const gamma = Math.pow(2, tone / 50);
+  const lut = new Uint8Array(256);
+  for (let v = 0; v < 256; v++) {
+    const x = inv ? 1 - v / 255 : v / 255;
+    lut[v] = Math.round(Math.pow(x, gamma) * 255);
   }
-  return it._inv;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = lut[d[i]]; d[i+1] = lut[d[i+1]]; d[i+2] = lut[d[i+2]];
+  }
+  g.putImageData(id, 0, 0);
+  it._pc = c; it._pk = key;
+  return c;
+}
+
+// White wherever the image is opaque, transparent where it isn't. Painting this
+// over a density map erases ink -- that's how one element knocks a hole in the
+// plate behind it.
+function whiteSil(it) {
+  if (it._sil) return it._sil;
+  const c = derivedCanvas(it.img), g = c.getContext("2d");
+  g.drawImage(it.img, 0, 0, c.width, c.height);
+  g.globalCompositeOperation = "source-in";
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, c.width, c.height);
+  it._sil = c;
+  return c;
 }
 
 // A folder is ONE ink plate, so its images combine the way ink on one plate
@@ -277,14 +304,29 @@ function densityOf(folder, dpi, W, H) {
 
   g.fillStyle = "#ffffff";
   g.fillRect(0, 0, W, H);
-  g.globalCompositeOperation = "darken";
 
-  for (const it of folder.items) {
+  // Everything is walked in one global stacking order (creation order), because
+  // an OPAQUE element has to knock out whatever sits behind it -- including
+  // artwork on the OTHER plate, which is the only way to stop the two inks
+  // overprinting through it.
+  //
+  //   normal element, own plate   darken     -- white is nothing, inks combine
+  //   opaque element, own plate   source-over-- replaces, so white knocks out
+  //   opaque element, other plate white silhouette -- erases that plate's ink
+  //   normal element, other plate ignored
+  const stack = [];
+  S.folders.forEach(f => f.items.forEach(it => stack.push({ it, f })));
+  stack.sort((a, b) => a.it.id - b.it.id);
+
+  for (const { it, f } of stack) {
+    const mine = f === folder;
+    if (!mine && !it.opaque) continue;
     const w = it.w * dpi, h = it.h * dpi;
     g.save();
     g.translate(it.x * dpi + w/2, it.y * dpi + h/2);
     if (it.rot) g.rotate(it.rot * RAD);
-    g.drawImage(imgFor(it), -w/2, -h/2, w, h);
+    g.globalCompositeOperation = (mine && !it.opaque) ? "darken" : "source-over";
+    g.drawImage(mine ? imgFor(it) : whiteSil(it), -w/2, -h/2, w, h);
     g.restore();
   }
   g.globalCompositeOperation = "source-over";
@@ -380,10 +422,18 @@ function plateCanvas(folder, dpi, W, H, cell, color) {
 // change. While you drag one image the other folder is untouched, so rebuilding
 // it every frame is pure waste -- with a 9-layer PSD that was most of the frame.
 let uid = 0;
+const sig = i => `${i.id}:${i.x.toFixed(3)},${i.y.toFixed(3)},${i.w.toFixed(3)},`
+                + `${i.h.toFixed(3)},${i.rot|0},${i.inv?1:0},${i.tone|0},${i.opaque?1:0}`;
+
 function folderKey(f, dpi, cell) {
+  // A plate also depends on OPAQUE elements in the other folder, since those
+  // punch holes in it. Only opaque ones are included, so with none in play this
+  // stays exactly as cheap as before and dragging still rebuilds one folder.
+  const knockouts = [];
+  for (const o of S.folders) if (o !== f)
+    for (const i of o.items) if (i.opaque) knockouts.push("k" + sig(i));
   return [dpi, cell, S.cover, f.angle, f.color, fast, W_H_KEY,
-    ...f.items.map(i => `${i.id}:${i.x.toFixed(3)},${i.y.toFixed(3)},${i.w.toFixed(3)},${i.h.toFixed(3)},${i.rot|0},${i.inv?1:0}`)
-  ].join("|");
+    ...f.items.map(sig), ...knockouts].join("|");
 }
 let W_H_KEY = "";
 
@@ -538,7 +588,7 @@ function addImage(img, folderIndex, cxIn, cyIn) {
   const wIn = S.pageIn.w * 0.6;
   const hIn = wIn * (img.naturalHeight / img.naturalWidth);
   const it = {
-    img, w: wIn, h: hIn, rot: 0, inv: false, id: ++uid,
+    img, w: wIn, h: hIn, rot: 0, inv: false, tone: 0, opaque: false, id: ++uid,
     x: (cxIn ?? S.pageIn.w/2) - wIn/2,
     y: (cyIn ?? S.pageIn.h/2) - hIn/2
   };
@@ -1000,14 +1050,22 @@ function buildSel() {
     <label><span>Rotate</span>
       <input type="range" id="rt" min="-180" max="180" step="1" value="${it.rot|0}">
       <span class="val" id="rtv">${it.rot|0}&deg;</span></label>
+    <label><span>Tone</span>
+      <input type="range" id="tn" min="-100" max="100" step="1" value="${it.tone|0}">
+      <span class="val" id="tnv">${(it.tone|0) > 0 ? "+" : ""}${it.tone|0}</span></label>
     <div class="row" style="margin-top:8px">
       <button id="rt0">0&deg;</button>
       <button id="inv"${it.inv ? ' style="background:var(--acc);border-color:var(--acc);color:#1c1c1f;font-weight:600"' : ''}>Invert</button>
+      <button id="opq"${it.opaque ? ' style="background:var(--acc);border-color:var(--acc);color:#1c1c1f;font-weight:600"' : ''}>Mask</button>
       <button id="fit">Fit page</button>
       <button id="mv">To ${S.folders[1 - S.sel.f].name}</button>
       <button id="del">Delete</button>
     </div>
-    <div class="note">Effective resolution
+    <div class="note"><b>Tone</b> darkens (+) or lightens (&minus;) just this
+      image's ink. <b>Mask</b> makes it opaque, so it covers what's behind it in
+      <i>both</i> inks instead of overprinting &mdash; normal, not multiply, and
+      its white areas knock out too.<br><br>
+      Effective resolution
       <b style="color:${eff < 150 ? "var(--bad)" : eff < 250 ? "var(--warn)" : "var(--ok)"}">${eff} ppi</b>
       at this size. Rotating turns the photo, not the screen.</div>`;
 
@@ -1025,6 +1083,12 @@ function buildSel() {
   };
   document.getElementById("rt0").onclick = () => { it.rot = 0; buildSel(); draw(); };
   document.getElementById("inv").onclick = () => { it.inv = !it.inv; buildSel(); draw(); };
+  document.getElementById("opq").onclick = () => { it.opaque = !it.opaque; buildSel(); draw(); };
+  document.getElementById("tn").oninput = e => {
+    it.tone = +e.target.value;
+    document.getElementById("tnv").textContent = (it.tone > 0 ? "+" : "") + it.tone;
+    draw();
+  };
   document.getElementById("fit").onclick = () => {
     const ar = it.h / it.w;
     if (S.pageIn.w * ar <= S.pageIn.h) { it.w = S.pageIn.w; it.h = it.w * ar; }

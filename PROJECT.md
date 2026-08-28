@@ -174,6 +174,28 @@ tone as MEAN LUMINANCE over a flat patch. This is the second time a bad metric
 sent me after a non-existent bug in this project (the first was single-pixel
 sampling for the cross-ink multiply check).
 
+## v3.4 (2026-08-28) - per-image Tone, and Mask (knockout)
+- Tone slider (-100..+100) per image: gamma on each channel via a 256-entry LUT,
+  baked into the same cached derived copy as Invert. Verified monotonic:
+  ink 0.067 -> 0.485 across the range, peak 12% -> 73%.
+- Mask makes an element opaque. Needed a GLOBAL stacking order, which did not
+  exist -- items only had per-folder array order. Now every plate is rasterised
+  by walking ALL items sorted by id (creation order):
+    own plate, normal  -> darken       (white is nothing, inks combine)
+    own plate, opaque  -> source-over  (replaces, so white knocks out)
+    other plate, opaque-> white silhouette (erases that plate's ink)
+    other plate, normal-> skipped
+  The white silhouette is the image drawn then source-in white, cached per item,
+  so knockout follows the artwork's alpha rather than just its rectangle.
+- folderKey now includes tone/opaque AND a signature of the OTHER folder's
+  opaque items, since those punch holes in this plate. Only opaque ones, so with
+  no masks in play the drag cache is exactly as cheap as before (verified 0ms
+  fully cached, 89ms one item moved).
+- Verified: overlap [158,127,180] overprinting -> [247,158,198] pure pink when
+  masked; the mask's white margin knocks blue out to clean paper; blue elsewhere
+  untouched; moving a mask invalidates the other folder's cache; exports carry
+  both tone and mask.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked

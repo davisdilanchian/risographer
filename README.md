@@ -37,6 +37,18 @@ way stacked pictures do.
   subtractive overprint. (Measured overlap `[156,145,188]` against a predicted
   `blue×pink/paper` of `[158,145,188]`.)
 
+**Tone** darkens (+) or lightens (−) one image's ink without touching anything
+else. Watch the peak-ink readout as you push it up.
+
+**Mask** makes one element opaque. Normally everything overprints: inks combine
+where they cross, and white shows through. A masked element instead covers
+whatever is behind it — in **both** inks — over its whole footprint, white areas
+included. Normal, not multiply. Use it to sit an element cleanly on top of a busy
+page instead of muddying into it.
+
+Stacking is creation order: whatever you added later is in front, so a mask
+knocks out what was already there, not what you add afterwards.
+
 **Invert** flips an individual image. Worth knowing what that means here: since
 white is nothing, inverting a photo turns its white background into *solid ink*.
 That's usually the point — it's how you get a dense field with the subject
@@ -61,6 +73,8 @@ currently off the sheet. Exports only ever contain the sheet itself.
 | Resize | scroll, or the Width field (in inches) |
 | Rotate | `Shift`+scroll, `,` / `.` keys (`Shift` = 15°), or the Rotate slider |
 | Invert | the **Invert** button on the selected image |
+| Darken / lighten | the **Tone** slider on the selected image |
+| Knock out what's behind | the **Mask** button on the selected image |
 | Nudge | arrow keys (`Shift` = 10×) |
 | Delete | `Delete` / `Backspace` |
 | Switch ink | the "To PINK" / "To BLUE" button |
