@@ -336,6 +336,44 @@ pasteboard selected all 13; the slider at 150% scaled the bbox 8.84x11.59 ->
 switching to A3 and clicking Fit to page produced a bbox exactly 11.69in wide,
 centred to 0.000 on both axes, with nothing reported off the sheet.
 
+## v3.8 - the ink that vanishes until you nudge something: the PLATE canvas
+
+Davis, on an 11x17 layout: "the pink stuff is hidden now" -- with the PINK
+folder still reading 8 images and 100% ink, the status line showing its dots,
+and the frame timed at 0 ms. Plus: "it's some kind of boundary thing, I can
+sometimes fix it by making something smaller."
+
+0 ms is the clue: that frame was entirely cache hits, so the cached PINK plate
+canvas was being drawn and painting nothing. Under multiply a blank plate is
+invisible, so the whole ink disappears while its cached dot count and ink
+readout still say it is there. "Making something smaller" changes that folder's
+cache key, which forces a rebuild -- that is the whole "boundary" effect, not
+geometry.
+
+Note this is the SAME shape of bug as v3.5 one level up: there the SOURCE went
+blank and the blank got cached; here the cached PLATE goes blank after the fact.
+A canvas is not storage: the browser may drop a backing store and hand it back
+cleared, and a canvas it cannot really allocate comes back blank rather than
+throwing (already noted in v3.2).
+
+FIXES:
+- halftone records a witness: the pixel where the fattest dot landed.
+- A cached plate is checked at that pixel before it is trusted; if the paint is
+  gone the plate is rebuilt. One 1x1 read per ink per frame, measured at
+  0.1-1.6 ms on a 369k-dot 11x17 page.
+- Dots are built into a Path2D, so if the first canvas comes back unpainted the
+  same paint is replayed on a software-backed canvas (willReadFrequently), which
+  does not depend on a GPU allocation. Only if THAT is blank do we report.
+- contextlost on the visible canvas drops every cache; contextrestored redraws.
+
+VERIFIED on Davis's own 11x17 file (13 images, 369k dots): clearing the cached
+PINK plate behind the app's back leaves the render byte-for-byte unchanged
+(mean 212,200,215), where a plate that stayed blank reads 212,225,225; and
+no-opping the first fill on BOTH plates still renders both inks via the
+software retry. Sweeps found no size, pitch or export-resolution threshold --
+there is no geometric "boundary", which is consistent with the cache being the
+whole story.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked

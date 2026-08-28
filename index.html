@@ -465,8 +465,11 @@ function halftone(den, folder, dpi, W, H, cell, inkColor) {
 
   const step = Math.max(1, Math.floor(cell / (fast ? 2 : 4)));
   let drawn = 0, peak = 0;
+  // Remember where the biggest dot went. A cached plate is checked against this
+  // pixel before it is trusted -- see renderPage.
+  let wx = -1, wy = -1, wr = 0;
 
-  g.beginPath();
+  const path = new Path2D();
   for (let vi = Math.floor(vMin/cell) - 1; vi <= Math.ceil(vMax/cell) + 1; vi++) {
     for (let ui = Math.floor(uMin/cell) - 1; ui <= Math.ceil(uMax/cell) + 1; ui++) {
       const su = (ui + 0.5) * cell, sv = (vi + 0.5) * cell;
@@ -503,14 +506,37 @@ function halftone(den, folder, dpi, W, H, cell, inkColor) {
       const f = 0.5642 + 0.1428 * clamp((d - 0.7) / 0.3, 0, 1);
       const r = cell * f * Math.sqrt(d);
       if (r < 0.12) continue;
-      g.moveTo(x + r, y);
-      g.arc(x, y, r, 0, 6.2831853);
+      path.moveTo(x + r, y);
+      path.arc(x, y, r, 0, 6.2831853);
       drawn++;
+      if (r > wr && x >= 0 && y >= 0 && x < W && y < H) { wr = r; wx = x | 0; wy = y | 0; }
     }
   }
-  g.fill();
+  g.fill(path);
   folder.peak = peak;
-  return { canvas: c, drawn };
+
+  // A canvas the browser could not really allocate comes back BLANK rather than
+  // throwing, and a blank plate means that ink silently vanishes from the page.
+  // If the paint didn't land, replay it on a software-backed canvas, which does
+  // not depend on a GPU allocation succeeding.
+  const witness = wr >= 1 ? { x: wx, y: wy } : null;
+  if (witness && !inked(c, witness)) {
+    const c2 = document.createElement("canvas");
+    c2.width = W; c2.height = H;
+    const g2 = c2.getContext("2d", { willReadFrequently: true });
+    g2.fillStyle = inkColor;
+    g2.fill(path);
+    if (inked(c2, witness)) return { canvas: c2, drawn, witness };
+    renderError = `${folder.name} could not be painted — the browser refused the canvas`;
+  }
+  return { canvas: c, drawn, witness };
+}
+
+// Is there paint at the pixel where the fattest dot went?
+function inked(canvas, w) {
+  try {
+    return canvas.getContext("2d").getImageData(w.x, w.y, 1, 1).data[3] > 8;
+  } catch { return false; }
 }
 
 /* ======================================================================= draw */
@@ -521,6 +547,16 @@ function plateCanvas(folder, dpi, W, H, cell, color) {
   const px = folder.off / 25.4 * dpi;               // misregistration, mm -> px
   out.getContext("2d").drawImage(canvas, px, px);
   return canvas === out ? canvas : out;
+}
+
+// A canvas is not permanent storage. The browser may drop a canvas's backing
+// store and hand it back cleared, and a cached plate that has been cleared
+// draws NOTHING -- which under multiply means that whole ink vanishes from the
+// page while its cached dot count and ink readout still say it is there. So
+// before trusting a cached plate, look at the pixel where its fattest dot was
+// laid down. One 1x1 read per ink per frame.
+function plateIntact(entry) {
+  return !entry.witness || inked(entry.canvas, entry.witness);
 }
 
 // A folder's plate only changes when its own contents or the screen settings
@@ -553,19 +589,19 @@ function renderPage(dpi, target, withSel, useCache) {
   let dots = 0, blankPlate = null;
   for (const f of S.folders) {
     if (!f.items.length) { f.peak = 0; f._cache = null; continue; }
-    let canvas, drawn;
+    let canvas, drawn, witness;
     const key = useCache ? folderKey(f, dpi, cell) : null;
-    if (key && f._cache && f._cache.key === key) {
+    if (key && f._cache && f._cache.key === key && plateIntact(f._cache)) {
       ({ canvas, drawn } = f._cache); f.peak = f._cache.peak;
     } else {
       try {
-        ({ canvas, drawn } = halftone(densityOf(f, dpi, W, H), f, dpi, W, H, cell, f.color));
+        ({ canvas, drawn, witness } = halftone(densityOf(f, dpi, W, H), f, dpi, W, H, cell, f.color));
         // NEVER cache a plate that came out blank when it shouldn't have. This
         // is what turned a one-frame glitch into "the image is just gone": the
         // blank was stored against the item's geometry, so it stayed blank
         // until the item was moved or resized and the key changed. Leaving it
         // uncached means the next frame re-rasterises and it comes back.
-        if (key && !densSuspect) f._cache = { key, canvas, drawn, peak: f.peak };
+        if (key && !densSuspect) f._cache = { key, canvas, drawn, witness, peak: f.peak };
         if (densSuspect) { recoverSources(f); blankPlate = f.name; }
       } catch (err) {
         // never let one ink take the whole page down silently
@@ -714,6 +750,15 @@ function updatePxNote() {
   else if (mp > 18) s += ` <span style="color:var(--warn)">${mp.toFixed(0)} MP — export may take a few seconds.</span>`;
   document.getElementById("pxnote").innerHTML = s;
 }
+
+// If the browser drops the visible canvas's backing store, everything cached
+// against it is suspect too. Rebuild from scratch rather than paint onto a
+// surface that may have been cleared underneath us.
+cv.addEventListener("contextlost", () => {
+  S.folders.forEach(f => { f._cache = null; });
+  pageBuf = null; densCanvas = null; densCtx = null; grainTile = null;
+});
+cv.addEventListener("contextrestored", () => draw());
 
 let raf = 0;
 function draw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
