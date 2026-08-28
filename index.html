@@ -551,6 +551,13 @@ async function sniffPSD(file) {
   } catch { return false; }
 }
 
+// the only place items are destroyed, so the only place a blob may be released
+function removeItem(fi, i) {
+  const it = S.folders[fi].items[i];
+  if (it && it.url) URL.revokeObjectURL(it.url);
+  S.folders[fi].items.splice(i, 1);
+}
+
 function loadFiles(files, cx, cy) {
   [...files].forEach(async (file, k) => {
     const ox = (cx ?? S.pageIn.w/2) + k*0.18, oy = (cy ?? S.pageIn.h/2) + k*0.18;
@@ -560,7 +567,12 @@ function loadFiles(files, cx, cy) {
     if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i.test(file.name)) {
       const img = new Image();
       const url = URL.createObjectURL(file);
-      img.onload  = () => { addImage(img, S.active, ox, oy); URL.revokeObjectURL(url); };
+      // Do NOT revoke on load. The app holds this Image for the whole session,
+      // and a browser may drop decoded image data under memory pressure and
+      // re-decode from src. With the blob revoked there is nothing left to
+      // decode, so the image silently draws NOTHING and its entire ink plate
+      // comes out blank. Released when the item is deleted instead.
+      img.onload  = () => { addImage(img, S.active, ox, oy).url = url; };
       img.onerror = () => { URL.revokeObjectURL(url);
         alert(`Couldn't read "${file.name}".\n\nIt looks like an image but the browser couldn't decode it.`); };
       img.src = url;
@@ -1022,7 +1034,7 @@ function buildSel() {
     S.active = to; buildFolders(); buildSel(); draw();
   };
   document.getElementById("del").onclick = () => {
-    S.folders[S.sel.f].items.splice(S.sel.i, 1);
+    removeItem(S.sel.f, S.sel.i);
     S.sel = null; buildFolders(); buildSel(); draw();
   };
 }
@@ -1095,7 +1107,7 @@ addEventListener("keydown", e => {
   if (!it) return;
   if (e.key === "Delete" || e.key === "Backspace") {
     e.preventDefault();
-    S.folders[S.sel.f].items.splice(S.sel.i, 1);
+    removeItem(S.sel.f, S.sel.i);
     S.sel = null; buildFolders(); buildSel(); draw(); return;
   }
   if (e.key === "," || e.key === ".") {

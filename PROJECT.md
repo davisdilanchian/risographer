@@ -121,6 +121,37 @@ app -- it's a halftone, so a single pixel usually lands between dots. An earlier
 check "proved" cross-ink multiply was broken when it was fine. Always average
 over a region.
 
+## v3.3 (2026-08-27) - ROOT CAUSE: revoked blob URLs
+
+Davis: "the presence of the image hides all the blue or the pink ... even images
+beyond its scope". Confirmed from his err.psd export: the BLUE layer was 0.00%
+opaque - an entire plate rendered as nothing.
+
+ROOT CAUSE, and it was mine, introduced in the "never fail silently" commit:
+
+    img.onload = () => { addImage(...); URL.revokeObjectURL(url); };
+
+The app keeps that Image for the whole session, but the blob was revoked the
+instant it loaded. Browsers may discard decoded image data under memory pressure
+and re-decode from src; with the blob revoked there is nothing to decode, so
+drawImage silently draws NOTHING. Under the darken model that leaves the density
+map pure white -> zero ink -> the whole folder's plate is blank. Explains every
+symptom: vanishes entirely, affects images unrelated to the one just added,
+intermittent, and worsens as more images are added.
+
+Proven, not guessed: after revoke, fetch(img.src) -> "Failed to fetch" and a
+fresh Image from the same src -> onerror. The already-decoded bitmap survives at
+first, which is why it works and then dies later.
+
+FIX: keep the object URL for the item's lifetime; release it in a single
+removeItem() used by both delete paths. Verified blob stays alive + re-decodable,
+both inks render, and deleting does release the URL (no leak).
+
+Note two earlier theories that were WRONG and cost time: (1) that the black
+background was simply inking everything - not reproducible; (2) memory pressure
+from oversized canvases - his images are all under 1.7MP. The canvas-reuse work
+from v3.2 is still worth keeping (render 114ms -> 46ms) but it was not the bug.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked
