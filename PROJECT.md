@@ -152,6 +152,28 @@ background was simply inking everything - not reproducible; (2) memory pressure
 from oversized canvases - his images are all under 1.7MP. The canvas-reuse work
 from v3.2 is still worth keeping (render 114ms -> 46ms) but it was not the bug.
 
+## v3.3b - "images disappear at high dot pitch"
+
+Almost certainly the SAME blob-revoke bug as v3.3, not a halftone problem.
+Changing dot pitch invalidates every folder's plate cache, which forces a full
+re-rasterisation of every image. If a blob was revoked and the browser had
+already evicted the decoded bitmap, those images draw nothing. High pitch also
+means far heavier renders, so more memory pressure and more eviction -- which is
+exactly why cranking the slider triggered it. Awaiting Davis retesting on the
+v3.3 build.
+
+While investigating I twice "fixed" the dot radius for canvas antialiasing.
+BOTH attempts were wrong and both made it materially worse. DO NOT DO THIS.
+Measured by mean luminance, ink is already flat across pitch (spread 0.041 blue,
+0.033 pink, 15->80 lpi). The bad attempts faded tone up to 4x at high pitch.
+
+ROOT OF MY ERROR, worth remembering: I measured with a threshold pixel count
+(pixels darker than a cutoff). That measures dot VISIBILITY, not ink laid down,
+and it rises with pitch purely because small dots overlap more. Always measure
+tone as MEAN LUMINANCE over a flat patch. This is the second time a bad metric
+sent me after a non-existent bug in this project (the first was single-pixel
+sampling for the cross-ink multiply check).
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
 - Layer MASKS are parsed past but not applied - a masked layer imports unmasked
