@@ -7,16 +7,13 @@
 <style>
   :root{
     --bg:#1c1c1f; --panel:#252529; --panel2:#2e2e33; --line:#3a3a41;
-    --tx:#e8e8ea; --tx2:#9a9aa2; --acc:#ff665e;
+    --tx:#e8e8ea; --tx2:#9a9aa2; --acc:#ff48b0;
     --ok:#4ec77f; --warn:#e8b64c; --bad:#ff6b5e;
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
-  body{
-    display:flex; background:var(--bg); color:var(--tx);
-    font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-    overflow:hidden;
-  }
+  body{display:flex;background:var(--bg);color:var(--tx);
+    font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
   #side{width:300px;flex:0 0 300px;background:var(--panel);
     border-right:1px solid var(--line);overflow-y:auto;padding:14px}
   h1{font-size:14px;margin:0 0 2px;letter-spacing:.02em}
@@ -26,12 +23,14 @@
     color:var(--tx2);margin:0 0 9px;font-weight:600}
   label{display:flex;align-items:center;justify-content:space-between;
     gap:8px;margin-bottom:7px;color:var(--tx2);font-size:12px}
-  input[type=range]{width:110px;accent-color:var(--acc)}
+  input[type=range]{width:108px;accent-color:var(--acc)}
   input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);
     border-radius:4px;background:none;cursor:pointer}
+  input[type=number]{width:66px;background:var(--panel2);border:1px solid var(--line);
+    color:var(--tx);border-radius:4px;padding:3px 6px;font:inherit;font-size:12px}
   select{background:var(--panel2);border:1px solid var(--line);color:var(--tx);
-    border-radius:4px;padding:3px 5px;font:inherit;font-size:12px}
-  .val{color:var(--tx);min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
+    border-radius:4px;padding:3px 5px;font:inherit;font-size:12px;max-width:150px}
+  .val{color:var(--tx);min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
   button{background:var(--panel2);border:1px solid var(--line);color:var(--tx);
     border-radius:5px;padding:6px 9px;font:inherit;font-size:12px;cursor:pointer}
   button:hover{background:#3a3a41}
@@ -53,6 +52,7 @@
   .thumb.sel{border-color:var(--acc)}
   .empty{color:var(--tx2);font-size:11px;font-style:italic;margin-top:7px}
   .note{color:var(--tx2);font-size:11px;margin-top:6px}
+  .note b{color:var(--tx)}
   #stage{flex:1;display:flex;align-items:center;justify-content:center;
     overflow:auto;padding:26px;position:relative}
   #wrap{position:relative;box-shadow:0 6px 34px rgba(0,0,0,.55);line-height:0}
@@ -60,12 +60,14 @@
   #hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     pointer-events:none;color:#8a8a92;font-size:15px;text-align:center;padding:30px}
   #drop{position:absolute;inset:0;border:3px dashed var(--acc);
-    background:rgba(255,102,94,.09);display:none;pointer-events:none;z-index:5}
+    background:rgba(255,72,176,.09);display:none;pointer-events:none;z-index:5}
   body.dragover #drop{display:block}
   #stat{position:absolute;left:14px;bottom:10px;color:#6c6c74;font-size:11px}
   #busy{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-    background:rgba(28,28,31,.75);color:var(--tx);font-size:14px;z-index:9}
+    background:rgba(28,28,31,.8);color:var(--tx);font-size:14px;z-index:9}
   body.busy #busy{display:flex}
+  #custom{display:none}
+  body.customsize #custom{display:block}
 </style>
 </head>
 <body>
@@ -85,32 +87,52 @@
 
   <div class="sec">
     <h2>Screen</h2>
-    <label><span>Dot size</span>
-      <input type="range" id="cell" min="3" max="24" step="1" value="7">
-      <span class="val" id="cellv">7</span></label>
+    <label><span>Dot pitch</span>
+      <input type="range" id="lpi" min="8" max="90" step="1" value="22">
+      <span class="val" id="lpiv">22 lpi</span></label>
     <label><span>Ink limit</span>
       <input type="range" id="cover" min="40" max="100" step="1" value="80">
-      <span class="val" id="coverv">80</span></label>
-    <div class="note">Riso studios advise a max of <b>75&ndash;85%</b> per ink.
-      A true 100% solid causes roller marks, smudging and jams. 80% is the
-      safe default.</div>
+      <span class="val" id="coverv">80%</span></label>
+    <div class="note">Dot pitch is in <b>lines per inch</b>, so the print looks
+      the same whatever resolution you export at. Riso is coarse: 15&ndash;35 lpi
+      is the usual range.<br><br>
+      Studios advise a max of <b>75&ndash;85%</b> ink per colour. A true 100%
+      solid causes roller marks, smudging and jams.</div>
   </div>
 
   <div class="sec">
     <h2>Page</h2>
     <label><span>Size</span>
       <select id="preset">
-        <option value="1275x1650">Letter portrait</option>
-        <option value="1650x1275">Letter landscape</option>
-        <option value="1240x1754">A4 portrait</option>
-        <option value="1754x1240">A4 landscape</option>
-        <option value="1500x1500">Square</option>
-        <option value="1350x1800">Poster 3:4</option>
+        <option value="8.5x11">Letter &mdash; 8.5 &times; 11 in</option>
+        <option value="11x8.5">Letter landscape</option>
+        <option value="8.27x11.69">A4 &mdash; 210 &times; 297 mm</option>
+        <option value="11.69x8.27">A4 landscape</option>
+        <option value="11.69x16.54">A3 &mdash; 297 &times; 420 mm</option>
+        <option value="16.54x11.69">A3 landscape</option>
+        <option value="5.83x8.27">A5 &mdash; 148 &times; 210 mm</option>
+        <option value="10x10">Square &mdash; 10 &times; 10 in</option>
+        <option value="custom">Custom&hellip;</option>
+      </select></label>
+    <div id="custom">
+      <label><span>Width</span>
+        <input type="number" id="pw" min="1" max="40" step="0.01" value="8.5"> in</label>
+      <label><span>Height</span>
+        <input type="number" id="ph" min="1" max="40" step="0.01" value="11"> in</label>
+      <div class="note">Also accepts mm if you'd rather &mdash; type
+        <b>297mm</b> and it converts.</div>
+    </div>
+    <label><span>Export at</span>
+      <select id="dpi">
+        <option value="150">150 dpi &mdash; draft</option>
+        <option value="300" selected>300 dpi &mdash; print</option>
+        <option value="600">600 dpi &mdash; fine</option>
       </select></label>
     <label><span>Paper</span><input type="color" id="paper" value="#f7f3ea"></label>
     <label><span>Grain</span>
       <input type="range" id="grain" min="0" max="40" step="1" value="12">
       <span class="val" id="grainv">12</span></label>
+    <div class="note" id="pxnote"></div>
   </div>
 
   <div class="sec">
@@ -120,7 +142,8 @@
       <button id="expPsd">PSD</button>
       <button id="expPlates">Plates</button>
     </div>
-    <div class="note"><b>PSD</b> keeps each ink as its own Multiply layer.
+    <div class="note">Dropping a <b>.psd</b> brings each layer in as its own
+      draggable image.<br><br><b>PSD</b> export keeps each ink as its own Multiply layer.
       <b>Plates</b> writes one black-on-white file per ink, which is what a
       print shop wants.</div>
   </div>
@@ -133,27 +156,32 @@
     <div id="drop"></div>
   </div>
   <div id="stat"></div>
-  <div id="busy">Reading PSD&hellip;</div>
+  <div id="busy">Working&hellip;</div>
 </div>
 
 <script>
 "use strict";
 
-/* ==================================================================== state */
+/* ====================================================================== state
+   Everything geometric is stored in INCHES, never pixels. Page size and export
+   resolution are then just view settings -- changing either never moves or
+   rescales your layout, and dot pitch stays physically the same. */
 const S = {
-  page: { w: 1275, h: 1650 },
+  pageIn: { w: 8.5, h: 11 },
+  dpi: 300,                  // export resolution
+  lpi: 22,                   // halftone pitch, lines per inch
   paper: "#f7f3ea",
-  cell: 7,
   cover: 0.80,
   grain: 12,
   active: 0,
   sel: null,
   folders: [
-    { name: "INK 1", color: "#ff665e", angle: 15, dx: 0, dy: 0, items: [], peak: 0 },
-    { name: "INK 2", color: "#00a95c", angle: 45, dx: 2, dy: 2, items: [], peak: 0 }
+    { name: "BLUE", color: "#0177bd", angle: 45, off: 0,   items: [], peak: 0 },
+    { name: "PINK", color: "#ff48b0", angle: 15, off: 0.4, items: [], peak: 0 }
   ]
 };
 
+const MAX_PREVIEW_PX = 2.2e6;      // keeps dragging smooth on any page size
 const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
 let grainTile = null, dragging = null, fast = false;
@@ -161,35 +189,46 @@ let grainTile = null, dragging = null, fast = false;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const RAD = Math.PI / 180;
 
+// resolution used for the on-screen canvas; capped so a 600dpi A3 still drags
+function previewDpi() {
+  const area = S.pageIn.w * S.pageIn.h;
+  return Math.max(40, Math.min(S.dpi, Math.sqrt(MAX_PREVIEW_PX / area)));
+}
+function geom(dpi) {
+  return {
+    W: Math.max(1, Math.round(S.pageIn.w * dpi)),
+    H: Math.max(1, Math.round(S.pageIn.h * dpi)),
+    cell: Math.max(2, dpi / S.lpi)
+  };
+}
+
 function makeGrain() {
   const n = 256, c = document.createElement("canvas");
   c.width = c.height = n;
   const g = c.getContext("2d"), d = g.createImageData(n, n);
   for (let i = 0; i < n * n; i++) {
     const v = 128 + (Math.random() - 0.5) * 190;
-    d.data[i*4] = d.data[i*4+1] = d.data[i*4+2] = v;
-    d.data[i*4+3] = 255;
+    d.data[i*4] = d.data[i*4+1] = d.data[i*4+2] = v; d.data[i*4+3] = 255;
   }
   g.putImageData(d, 0, 0);
   return c;
 }
 
-/* ============================================================ density map */
-// Composites a folder's images into a page-size ink-density buffer.
-function densityOf(folder) {
-  const { w, h } = S.page;
+/* ================================================================ density map */
+function densityOf(folder, dpi, W, H) {
   const c = document.createElement("canvas");
-  c.width = w; c.height = h;
+  c.width = W; c.height = H;
   const g = c.getContext("2d", { willReadFrequently: true });
   for (const it of folder.items) {
+    const w = it.w * dpi, h = it.h * dpi;
     g.save();
-    g.translate(it.x + it.w / 2, it.y + it.h / 2);
+    g.translate(it.x * dpi + w/2, it.y * dpi + h/2);
     if (it.rot) g.rotate(it.rot * RAD);
-    g.drawImage(it.img, -it.w / 2, -it.h / 2, it.w, it.h);
+    g.drawImage(it.img, -w/2, -h/2, w, h);
     g.restore();
   }
-  const px = g.getImageData(0, 0, w, h).data;
-  const den = new Float32Array(w * h);
+  const px = g.getImageData(0, 0, W, H).data;
+  const den = new Float32Array(W * H);
   for (let i = 0, p = 0; i < den.length; i++, p += 4) {
     const a = px[p + 3] / 255;
     if (a === 0) continue;
@@ -199,26 +238,25 @@ function densityOf(folder) {
   return den;
 }
 
-/* ============================================================== halftoning */
-// The lattice is generated in PAGE space from the page origin, so the dot grid
-// never moves when an image moves or rotates. Rotating a photo turns the photo,
-// not its screen -- same as a real press.
-function halftone(den, folder, cell, inkColor) {
-  const { w, h } = S.page;
+/* ================================================================= halftoning */
+// The lattice is built in PAGE space from the page origin, so the dot grid never
+// moves when an image moves or rotates. Rotating a photo turns the photo, not
+// its screen. Pitch is derived from dpi/lpi, so it's physically constant.
+function halftone(den, folder, dpi, W, H, cell, inkColor) {
   const c = document.createElement("canvas");
-  c.width = w; c.height = h;
+  c.width = W; c.height = H;
   const g = c.getContext("2d");
   g.fillStyle = inkColor;
 
   const a = folder.angle * RAD, cs = Math.cos(a), sn = Math.sin(a);
   let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity;
-  for (const [x, y] of [[0,0],[w,0],[0,h],[w,h]]) {
+  for (const [x, y] of [[0,0],[W,0],[0,H],[W,H]]) {
     const u = x*cs + y*sn, v = -x*sn + y*cs;
     if (u < uMin) uMin = u; if (u > uMax) uMax = u;
     if (v < vMin) vMin = v; if (v > vMax) vMax = v;
   }
 
-  const step = fast ? Math.max(2, cell >> 1) : Math.max(1, cell >> 2);
+  const step = Math.max(1, Math.floor(cell / (fast ? 2 : 4)));
   let drawn = 0, peak = 0;
 
   g.beginPath();
@@ -226,29 +264,29 @@ function halftone(den, folder, cell, inkColor) {
     for (let ui = Math.floor(uMin/cell) - 1; ui <= Math.ceil(uMax/cell) + 1; ui++) {
       const su = (ui + 0.5) * cell, sv = (vi + 0.5) * cell;
       const x = su*cs - sv*sn, y = su*sn + sv*cs;
-      if (x < -cell || y < -cell || x > w + cell || y > h + cell) continue;
+      if (x < -cell || y < -cell || x > W + cell || y > H + cell) continue;
 
-      const x0 = Math.max(0, (x - cell/2) | 0), x1 = Math.min(w - 1, (x + cell/2) | 0);
-      const y0 = Math.max(0, (y - cell/2) | 0), y1 = Math.min(h - 1, (y + cell/2) | 0);
+      const x0 = Math.max(0, (x - cell/2) | 0), x1 = Math.min(W - 1, (x + cell/2) | 0);
+      const y0 = Math.max(0, (y - cell/2) | 0), y1 = Math.min(H - 1, (y + cell/2) | 0);
       if (x1 < x0 || y1 < y0) continue;
 
       // most of a page is empty; probe corners+centre before the box average
-      if (!den[y0*w + x0] && !den[y0*w + x1] && !den[y1*w + x0] && !den[y1*w + x1]
-          && !den[((y0+y1)>>1)*w + ((x0+x1)>>1)]) continue;
+      if (!den[y0*W + x0] && !den[y0*W + x1] && !den[y1*W + x0] && !den[y1*W + x1]
+          && !den[((y0+y1)>>1)*W + ((x0+x1)>>1)]) continue;
 
       let sum = 0, n = 0;
       for (let yy = y0; yy <= y1; yy += step)
-        for (let xx = x0; xx <= x1; xx += step) { sum += den[yy*w + xx]; n++; }
+        for (let xx = x0; xx <= x1; xx += step) { sum += den[yy*W + xx]; n++; }
       if (!n) continue;
 
       const d = (sum / n) * S.cover;
       if (d > peak) peak = d;
       if (d < 0.008) continue;
 
-      // Dot AREA must equal the tone: r = cell*sqrt(d/PI), factor 0.5642.
-      // That alone never fills solid (circles on a square lattice leave corner
-      // gaps until r hits cell/sqrt(2) = 0.707), so ramp the factor across the
-      // top of the range: exact in midtones, genuinely solid at max ink.
+      // Dot AREA must equal the tone: r = cell*sqrt(d/PI), factor 0.5642. That
+      // alone never fills solid (circles on a square lattice leave corner gaps
+      // until r hits cell/sqrt(2) = 0.707), so ramp the factor across the top of
+      // the range: exact in midtones, genuinely solid at max ink.
       const f = 0.5642 + 0.1428 * clamp((d - 0.7) / 0.3, 0, 1);
       const r = cell * f * Math.sqrt(d);
       if (r < 0.12) continue;
@@ -262,55 +300,71 @@ function halftone(den, folder, cell, inkColor) {
   return { canvas: c, drawn };
 }
 
-/* ==================================================================== draw */
-function render() {
-  const { w, h } = S.page;
-  cv.width = w; cv.height = h;
-  ctx.fillStyle = S.paper;
-  ctx.fillRect(0, 0, w, h);
+/* ======================================================================= draw */
+function plateCanvas(folder, dpi, W, H, cell, color) {
+  const { canvas } = halftone(densityOf(folder, dpi, W, H), folder, dpi, W, H, cell, color);
+  const out = document.createElement("canvas");
+  out.width = W; out.height = H;
+  const px = folder.off / 25.4 * dpi;               // misregistration, mm -> px
+  out.getContext("2d").drawImage(canvas, px, px);
+  return canvas === out ? canvas : out;
+}
 
-  const t0 = performance.now();
+function renderPage(dpi, target, withSel) {
+  const { W, H, cell } = geom(dpi);
+  target.width = W; target.height = H;
+  const c = target.getContext("2d");
+  c.fillStyle = S.paper;
+  c.fillRect(0, 0, W, H);
+
   let dots = 0;
-
   for (const f of S.folders) {
     if (!f.items.length) { f.peak = 0; continue; }
-    const { canvas, drawn } = halftone(densityOf(f), f, S.cell, f.color);
+    const { canvas, drawn } = halftone(densityOf(f, dpi, W, H), f, dpi, W, H, cell, f.color);
     dots += drawn;
-    ctx.globalCompositeOperation = "multiply";
-    ctx.drawImage(canvas, f.dx, f.dy);
-    ctx.globalCompositeOperation = "source-over";
+    const px = f.off / 25.4 * dpi;
+    c.globalCompositeOperation = "multiply";
+    c.drawImage(canvas, px, px);
+    c.globalCompositeOperation = "source-over";
   }
 
   if (S.grain > 0) {
     if (!grainTile) grainTile = makeGrain();
-    ctx.save();
-    ctx.globalAlpha = S.grain / 100;
-    ctx.globalCompositeOperation = "overlay";
-    ctx.fillStyle = ctx.createPattern(grainTile, "repeat");
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
+    c.save();
+    c.globalAlpha = S.grain / 100;
+    c.globalCompositeOperation = "overlay";
+    c.fillStyle = c.createPattern(grainTile, "repeat");
+    c.fillRect(0, 0, W, H);
+    c.restore();
   }
 
-  if (S.sel) {
+  if (withSel && S.sel) {
     const it = S.folders[S.sel.f].items[S.sel.i];
     if (it) {
-      ctx.save();
-      ctx.translate(it.x + it.w/2, it.y + it.h/2);
-      if (it.rot) ctx.rotate(it.rot * RAD);
-      ctx.strokeStyle = "#1e90ff";
-      ctx.lineWidth = Math.max(2, w / 500);
-      ctx.setLineDash([10, 7]);
-      ctx.strokeRect(-it.w/2, -it.h/2, it.w, it.h);
-      ctx.restore();
+      const w = it.w * dpi, h = it.h * dpi;
+      c.save();
+      c.translate(it.x * dpi + w/2, it.y * dpi + h/2);
+      if (it.rot) c.rotate(it.rot * RAD);
+      c.strokeStyle = "#1e90ff";
+      c.lineWidth = Math.max(2, W / 500);
+      c.setLineDash([10, 7]);
+      c.strokeRect(-w/2, -h/2, w, h);
+      c.restore();
     }
   }
+  return dots;
+}
 
+function render() {
+  const t0 = performance.now();
+  const dpi = previewDpi();
+  const dots = renderPage(dpi, cv, true);
   const total = S.folders.reduce((a, f) => a + f.items.length, 0);
   document.getElementById("hint").style.display = total ? "none" : "flex";
   document.getElementById("stat").textContent =
-    `${Math.round(performance.now() - t0)} ms · ${dots.toLocaleString()} dots` +
-    (fast ? " · preview" : "");
-  updatePeaks();
+    `${Math.round(performance.now() - t0)} ms · ${dots.toLocaleString()} dots · `
+    + `preview ${Math.round(dpi)} dpi` + (fast ? " · fast" : "");
+  updatePeaks(); updatePxNote();
 }
 
 function updatePeaks() {
@@ -321,23 +375,35 @@ function updatePeaks() {
     el.textContent = p + "% ink";
     el.style.color = p > 90 ? "var(--bad)" : p > 85 ? "var(--warn)" : "var(--ok)";
     el.title = p > 85
-      ? "Above what most riso studios accept — expect roller marks and smudging. Lower the Ink limit."
+      ? "Above what riso studios accept — expect roller marks. Lower the Ink limit."
       : "Within the 75–85% range riso studios recommend.";
   });
+}
+
+function updatePxNote() {
+  const { W, H } = geom(S.dpi);
+  const mp = W * H / 1e6;
+  const mm = (v) => Math.round(v * 25.4);
+  let s = `Exports at <b>${W} &times; ${H} px</b> `
+        + `(${S.pageIn.w.toFixed(2)} &times; ${S.pageIn.h.toFixed(2)} in / `
+        + `${mm(S.pageIn.w)} &times; ${mm(S.pageIn.h)} mm).`;
+  if (mp > 40) s += ` <span style="color:var(--bad)">That's ${mp.toFixed(0)} megapixels — exporting will be slow and may run out of memory. Consider 300 dpi.</span>`;
+  else if (mp > 18) s += ` <span style="color:var(--warn)">${mp.toFixed(0)} MP — export may take a few seconds.</span>`;
+  document.getElementById("pxnote").innerHTML = s;
 }
 
 let raf = 0;
 function draw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
 
-/* ============================================================ adding art */
-function addImage(img, folderIndex, cx, cy) {
+/* ================================================================= adding art */
+function addImage(img, folderIndex, cxIn, cyIn) {
   const f = S.folders[folderIndex];
-  const sc = Math.min(1, S.page.w * 0.6 / img.naturalWidth);
-  const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
+  const wIn = S.pageIn.w * 0.6;
+  const hIn = wIn * (img.naturalHeight / img.naturalWidth);
   const it = {
-    img, w, h, rot: 0,
-    x: clamp((cx ?? S.page.w/2) - w/2, -w*.3, S.page.w - w*.7),
-    y: clamp((cy ?? S.page.h/2) - h/2, -h*.3, S.page.h - h*.7)
+    img, w: wIn, h: hIn, rot: 0,
+    x: (cxIn ?? S.pageIn.w/2) - wIn/2,
+    y: (cyIn ?? S.pageIn.h/2) - hIn/2
   };
   f.items.push(it);
   S.sel = { f: folderIndex, i: f.items.length - 1 };
@@ -347,12 +413,10 @@ function addImage(img, folderIndex, cx, cy) {
 
 function loadFiles(files, cx, cy) {
   [...files].forEach((file, k) => {
-    const ox = (cx ?? S.page.w/2) + k*26, oy = (cy ?? S.page.h/2) + k*26;
-    const isPsd = /\.psd$/i.test(file.name) ||
-                  file.type === "image/vnd.adobe.photoshop";
-    if (isPsd) {
-      importPSD(file, ox, oy);
-    } else if (file.type.startsWith("image/")) {
+    const ox = (cx ?? S.pageIn.w/2) + k*0.18, oy = (cy ?? S.pageIn.h/2) + k*0.18;
+    const isPsd = /\.psd$/i.test(file.name) || file.type === "image/vnd.adobe.photoshop";
+    if (isPsd) importPSD(file, ox, oy);
+    else if (file.type.startsWith("image/")) {
       const img = new Image();
       img.onload = () => addImage(img, S.active, ox, oy);
       img.src = URL.createObjectURL(file);
@@ -360,10 +424,7 @@ function loadFiles(files, cx, cy) {
   });
 }
 
-/* =============================================================== PSD read */
-// Reads the flattened composite that Photoshop writes at the end of every PSD
-// saved with Maximize Compatibility on (the default). Layer-by-layer import is
-// a much bigger job -- modern PSDs ZIP their layer data.
+/* =================================================================== PSD read */
 function unpackBits(src, off, len, dst, dstOff, count) {
   let i = off, end = off + len, p = dstOff, lim = dstOff + count;
   while (i < end && p < lim) {
@@ -378,8 +439,7 @@ function parsePSD(buf) {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== "8BPS")
     throw new Error("That isn't a PSD file.");
-  const ver = dv.getUint16(4);
-  if (ver !== 1) throw new Error("PSB (large document) files aren't supported — save as .psd.");
+  if (dv.getUint16(4) !== 1) throw new Error("PSB (large document) files aren't supported — save as .psd.");
 
   const nCh = dv.getUint16(12), H = dv.getUint32(14), W = dv.getUint32(18),
         depth = dv.getUint16(22), mode = dv.getUint16(24);
@@ -388,10 +448,9 @@ function parsePSD(buf) {
     throw new Error("Only RGB and Greyscale PSDs are supported (not CMYK, Lab or Indexed).");
 
   let o = 26;
-  o += 4 + dv.getUint32(o);          // colour mode data
-  o += 4 + dv.getUint32(o);          // image resources
-  o += 4 + dv.getUint32(o);          // layer & mask info
-
+  o += 4 + dv.getUint32(o);
+  o += 4 + dv.getUint32(o);
+  o += 4 + dv.getUint32(o);
   if (o + 2 > buf.length)
     throw new Error("This PSD has no flattened composite. Re-save it with Maximize Compatibility on.");
 
@@ -399,51 +458,207 @@ function parsePSD(buf) {
   if (comp !== 0 && comp !== 1)
     throw new Error("This PSD uses ZIP compression for its composite, which isn't supported. Re-save from Photoshop.");
 
-  const want = mode === 1 ? 1 : 3;
-  const planes = [];
-
+  const want = mode === 1 ? 1 : 3, planes = [];
   if (comp === 0) {
-    for (let c = 0; c < want; c++) {
-      planes.push(buf.subarray(o + c*W*H, o + (c+1)*W*H));
-    }
+    for (let c = 0; c < want; c++) planes.push(buf.subarray(o + c*W*H, o + (c+1)*W*H));
   } else {
     const counts = new Uint16Array(nCh * H);
     for (let i = 0; i < nCh * H; i++) { counts[i] = dv.getUint16(o); o += 2; }
     for (let c = 0; c < nCh; c++) {
       if (c < want) {
         const plane = new Uint8Array(W * H);
-        for (let y = 0; y < H; y++) {
-          unpackBits(buf, o, counts[c*H + y], plane, y*W, W);
-          o += counts[c*H + y];
-        }
+        for (let y = 0; y < H; y++) { unpackBits(buf, o, counts[c*H+y], plane, y*W, W); o += counts[c*H+y]; }
         planes.push(plane);
-      } else {
-        for (let y = 0; y < H; y++) o += counts[c*H + y];
-      }
+      } else for (let y = 0; y < H; y++) o += counts[c*H + y];
     }
   }
 
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
-  const g = c.getContext("2d");
-  const id = g.createImageData(W, H), d = id.data;
-  if (want === 1) {
-    for (let i = 0, p = 0; i < W*H; i++, p += 4) {
-      d[p] = d[p+1] = d[p+2] = planes[0][i]; d[p+3] = 255;
-    }
-  } else {
-    for (let i = 0, p = 0; i < W*H; i++, p += 4) {
-      d[p] = planes[0][i]; d[p+1] = planes[1][i]; d[p+2] = planes[2][i]; d[p+3] = 255;
-    }
-  }
+  const g = c.getContext("2d"), id = g.createImageData(W, H), d = id.data;
+  if (want === 1) for (let i = 0, p = 0; i < W*H; i++, p += 4) { d[p]=d[p+1]=d[p+2]=planes[0][i]; d[p+3]=255; }
+  else for (let i = 0, p = 0; i < W*H; i++, p += 4) { d[p]=planes[0][i]; d[p+1]=planes[1][i]; d[p+2]=planes[2][i]; d[p+3]=255; }
   g.putImageData(id, 0, 0);
   return c;
 }
 
+/* ------------------------------------------------- PSD: layers, individually */
+async function inflate(bytes) {
+  const s = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+
+// One channel of one layer. Compression is per channel: 0 raw, 1 PackBits,
+// 2 zlib, 3 zlib with per-row delta prediction.
+async function decodeChannel(buf, off, byteLen, w, h) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const comp = dv.getUint16(off);
+  const body = off + 2, plane = new Uint8Array(w * h);
+  if (comp === 0) {
+    plane.set(buf.subarray(body, body + w * h));
+  } else if (comp === 1) {
+    let p = body + 2 * h;
+    for (let y = 0; y < h; y++) {
+      const n = dv.getUint16(body + 2 * y);
+      unpackBits(buf, p, n, plane, y * w, w);
+      p += n;
+    }
+  } else if (comp === 2 || comp === 3) {
+    const raw = await inflate(buf.subarray(body, off + byteLen));
+    plane.set(raw.subarray(0, w * h));
+    if (comp === 3) for (let y = 0; y < h; y++) {          // undo delta prediction
+      const r = y * w;
+      for (let x = 1; x < w; x++) plane[r + x] = (plane[r + x] + plane[r + x - 1]) & 255;
+    }
+  } else throw new Error("unknown channel compression " + comp);
+  return plane;
+}
+
+async function parsePSDLayers(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== "8BPS") throw new Error("Not a PSD.");
+  if (dv.getUint16(4) !== 1) throw new Error("PSB files aren't supported — save as .psd.");
+  const docH = dv.getUint32(14), docW = dv.getUint32(18),
+        depth = dv.getUint16(22), mode = dv.getUint16(24);
+  if (depth !== 8) throw new Error(`This PSD is ${depth}-bit. Save it as 8-bit.`);
+  if (mode !== 3 && mode !== 1)
+    throw new Error("Only RGB and Greyscale PSDs are supported (not CMYK, Lab or Indexed).");
+
+  let o = 26;
+  o += 4 + dv.getUint32(o);                                  // colour mode data
+
+  // image resources -- pull 1005 (resolution) so we can place at true size
+  const irLen = dv.getUint32(o); o += 4;
+  let dpi = 0;
+  {
+    let p = o, end = o + irLen;
+    while (p + 12 <= end) {
+      if (String.fromCharCode(buf[p],buf[p+1],buf[p+2],buf[p+3]) !== "8BIM") break;
+      const id = dv.getUint16(p + 4);
+      let q = p + 6, nl = buf[q];
+      q += 1 + nl; q += (q - p) % 2;                          // pascal name, even pad
+      const len = dv.getUint32(q); q += 4;
+      if (id === 1005) dpi = dv.getUint16(q) + dv.getUint16(q + 2) / 65536;
+      p = q + len + (len % 2);
+    }
+  }
+  o += irLen;
+
+  const lmLen = dv.getUint32(o); o += 4;
+  if (lmLen === 0) throw new Error("no layer section");
+  const liLen = dv.getUint32(o); o += 4;
+  if (liLen === 0) throw new Error("no layer section");
+  let count = dv.getInt16(o); o += 2;
+  count = Math.abs(count);
+
+  const recs = [];
+  for (let i = 0; i < count; i++) {
+    const top = dv.getInt32(o), left = dv.getInt32(o+4),
+          bottom = dv.getInt32(o+8), right = dv.getInt32(o+12);
+    o += 16;
+    const nch = dv.getUint16(o); o += 2;
+    const chans = [];
+    for (let c = 0; c < nch; c++) { chans.push({ id: dv.getInt16(o), len: dv.getUint32(o+2) }); o += 6; }
+    o += 4;                                                   // '8BIM'
+    o += 4;                                                   // blend key
+    const opacity = buf[o], flags = buf[o+2]; o += 4;
+    const extraLen = dv.getUint32(o); o += 4;
+    const extraEnd = o + extraLen;
+    o += 4 + dv.getUint32(o);                                 // layer mask data
+    o += 4 + dv.getUint32(o);                                 // blending ranges
+    const nl = buf[o]; let name = "";
+    for (let k = 0; k < nl; k++) name += String.fromCharCode(buf[o + 1 + k]);
+    o += 1 + nl; o += (4 - ((1 + nl) % 4)) % 4;
+
+    let isGroup = false;
+    while (o + 12 <= extraEnd) {                              // additional info
+      const sig = String.fromCharCode(buf[o],buf[o+1],buf[o+2],buf[o+3]);
+      if (sig !== "8BIM" && sig !== "8B64") break;
+      const key = String.fromCharCode(buf[o+4],buf[o+5],buf[o+6],buf[o+7]);
+      const len = dv.getUint32(o + 8), data = o + 12;
+      if (key === "lsct" && len >= 4 && dv.getUint32(data) !== 0) isGroup = true;
+      if (key === "luni" && len >= 4) {
+        const n = dv.getUint32(data); let s = "";
+        for (let k = 0; k < n; k++) s += String.fromCharCode(dv.getUint16(data + 4 + k*2));
+        if (s) name = s;
+      }
+      o = data + len + (len % 2);
+    }
+    o = extraEnd;
+    recs.push({ top, left, bottom, right, chans, opacity, flags, name, isGroup });
+  }
+
+  const out = [];
+  for (const r of recs) {
+    const w = r.right - r.left, h = r.bottom - r.top;
+    let p = o;
+    for (const c of r.chans) { c.off = p; p += c.len; }
+    o = p;
+    if (r.isGroup || w <= 0 || h <= 0) continue;              // group markers, empty layers
+    if (r.flags & 0x02) continue;                             // hidden
+
+    const got = {};
+    for (const c of r.chans) {
+      if (c.id < -1) continue;                                // -2/-3 are masks
+      got[c.id] = await decodeChannel(buf, c.off, c.len, w, h);
+    }
+    const rp = got[0], gp = mode === 1 ? got[0] : got[1], bp = mode === 1 ? got[0] : got[2], ap = got[-1];
+    if (!rp) continue;                                        // adjustment layer, no pixels
+
+    const cvs = document.createElement("canvas");
+    cvs.width = w; cvs.height = h;
+    const g = cvs.getContext("2d"), id = g.createImageData(w, h), d = id.data;
+    let anyOpaque = false;
+    for (let i = 0, q = 0; i < w*h; i++, q += 4) {
+      const a = ap ? ap[i] : 255;
+      d[q] = rp[i]; d[q+1] = gp[i]; d[q+2] = bp[i]; d[q+3] = a;
+      if (a > 4) anyOpaque = true;
+    }
+    if (!anyOpaque) continue;
+    g.putImageData(id, 0, 0);
+    out.push({ name: r.name || "layer", x: r.left, y: r.top, w, h, canvas: cvs });
+  }
+
+  if (!out.length) throw new Error("no pixel layers");
+  return { docW, docH, dpi, layers: out };
+}
+
 function importPSD(file, cx, cy) {
   document.body.classList.add("busy");
-  file.arrayBuffer().then(ab => {
-    const canvas = parsePSD(new Uint8Array(ab));
+  file.arrayBuffer().then(async ab => {
+    const buf = new Uint8Array(ab);
+    let doc = null;
+    try { doc = await parsePSDLayers(buf); }
+    catch (e) { doc = null; }                                 // fall back to composite
+
+    if (doc) {
+      // place the document at its true physical size when the PSD records a
+      // sane resolution; otherwise fit it to 80% of the page
+      let scale = (doc.dpi >= 30 && doc.dpi <= 1200) ? 1 / doc.dpi
+                                                     : S.pageIn.w * 0.8 / doc.docW;
+      const docWin = doc.docW * scale, docHin = doc.docH * scale;
+      if (docWin > S.pageIn.w || docHin > S.pageIn.h)
+        scale *= Math.min(S.pageIn.w / docWin, S.pageIn.h / docHin);
+      const ox = (cx ?? S.pageIn.w/2) - doc.docW * scale / 2;
+      const oy = (cy ?? S.pageIn.h/2) - doc.docH * scale / 2;
+
+      let pending = doc.layers.length;
+      doc.layers.forEach(L => {
+        const img = new Image();
+        img.onload = () => {
+          const it = addImage(img, S.active);
+          it.name = L.name;
+          it.w = L.w * scale; it.h = L.h * scale;
+          it.x = ox + L.x * scale; it.y = oy + L.y * scale;
+          if (--pending === 0) { document.body.classList.remove("busy"); buildFolders(); buildSel(); draw(); }
+        };
+        img.onerror = () => { if (--pending === 0) document.body.classList.remove("busy"); };
+        img.src = L.canvas.toDataURL();
+      });
+      return;
+    }
+
+    const canvas = parsePSD(buf);                             // flattened composite
     const img = new Image();
     img.onload = () => { document.body.classList.remove("busy"); addImage(img, S.active, cx, cy); };
     img.onerror = () => { document.body.classList.remove("busy"); alert("Couldn't decode that PSD."); };
@@ -454,15 +669,12 @@ function importPSD(file, cx, cy) {
   });
 }
 
-/* ============================================================== PSD write */
+/* ================================================================== PSD write */
 class Buf {
   constructor(n = 1 << 16) { this.b = new Uint8Array(n); this.n = 0; }
-  need(k) {
-    if (this.n + k <= this.b.length) return;
-    let s = this.b.length * 2;
-    while (s < this.n + k) s *= 2;
-    const nb = new Uint8Array(s); nb.set(this.b.subarray(0, this.n)); this.b = nb;
-  }
+  need(k) { if (this.n + k <= this.b.length) return;
+    let s = this.b.length * 2; while (s < this.n + k) s *= 2;
+    const nb = new Uint8Array(s); nb.set(this.b.subarray(0, this.n)); this.b = nb; }
   u8(v)  { this.need(1); this.b[this.n++] = v & 255; }
   u16(v) { this.need(2); this.b[this.n++] = (v >> 8) & 255; this.b[this.n++] = v & 255; }
   u32(v) { this.need(4); this.b[this.n++] = (v>>>24)&255; this.b[this.n++] = (v>>>16)&255;
@@ -495,8 +707,7 @@ function rleChannel(plane, W, H) {
   const counts = new Buf(H * 2), data = new Buf(W * H);
   for (let y = 0; y < H; y++) {
     const p = packBits(plane.subarray(y * W, (y + 1) * W));
-    counts.u16(p.length);
-    data.raw(p);
+    counts.u16(p.length); data.raw(p);
   }
   return { counts: counts.out(), data: data.out() };
 }
@@ -508,14 +719,21 @@ function planesOf(canvas, W, H) {
   return { r, g, b, a };
 }
 
-// layers are bottom-to-top: {name, blend:'norm'|'mul '|'over', opacity, planes}
-function buildPSD(W, H, layers, composite) {
+function buildPSD(W, H, layers, composite, dpi) {
   const psd = new Buf(1 << 20);
   psd.str("8BPS"); psd.u16(1);
   for (let i = 0; i < 6; i++) psd.u8(0);
   psd.u16(3); psd.u32(H); psd.u32(W); psd.u16(8); psd.u16(3);
-  psd.u32(0);                                   // colour mode data
-  psd.u32(0);                                   // image resources
+  psd.u32(0);                                        // colour mode data
+
+  // image resources: resolution block (1005) so Photoshop opens it at the right
+  // physical size instead of guessing 72 dpi
+  const res = new Buf(64);
+  res.str("8BIM"); res.u16(1005); res.u16(0); res.u32(16);
+  const fx = (v) => { res.u16(v | 0); res.u16(Math.round((v % 1) * 65536)); };
+  fx(dpi); res.u16(1); res.u16(1); fx(dpi); res.u16(1); res.u16(1);
+  const resOut = res.out();
+  psd.u32(resOut.length); psd.raw(resOut);
 
   const enc = layers.map(L => [[-1, L.planes.a], [0, L.planes.r], [1, L.planes.g], [2, L.planes.b]]
     .map(([id, plane]) => {
@@ -526,30 +744,27 @@ function buildPSD(W, H, layers, composite) {
   const li = new Buf(1 << 20);
   li.u16(layers.length);
   layers.forEach((L, i) => {
-    li.u32(0); li.u32(0); li.u32(H); li.u32(W);       // bounds t,l,b,r
+    li.u32(0); li.u32(0); li.u32(H); li.u32(W);
     li.u16(4);
     for (const c of enc[i]) { li.u16(c.id < 0 ? 65536 + c.id : c.id); li.u32(c.len); }
     li.str("8BIM"); li.str(L.blend);
     li.u8(L.opacity ?? 255); li.u8(0); li.u8(0); li.u8(0);
     const nameLen = 1 + L.name.length, pad = (4 - (nameLen % 4)) % 4;
     li.u32(4 + 4 + nameLen + pad);
-    li.u32(0);                                        // layer mask
-    li.u32(0);                                        // blending ranges
+    li.u32(0); li.u32(0);
     li.u8(L.name.length); li.str(L.name);
     for (let k = 0; k < pad; k++) li.u8(0);
   });
-  layers.forEach((L, i) => {
-    for (const c of enc[i]) { li.u16(1); li.raw(c.counts); li.raw(c.data); }
-  });
+  layers.forEach((L, i) => { for (const c of enc[i]) { li.u16(1); li.raw(c.counts); li.raw(c.data); } });
 
   const layerInfo = li.out(), padLI = layerInfo.length % 2;
   psd.u32(4 + layerInfo.length + padLI + 4);
   psd.u32(layerInfo.length + padLI);
   psd.raw(layerInfo);
   if (padLI) psd.u8(0);
-  psd.u32(0);                                         // global layer mask info
+  psd.u32(0);
 
-  psd.u16(1);                                         // merged image: RLE
+  psd.u16(1);
   const allCounts = new Buf(H * 3 * 2), parts = [];
   for (const plane of [composite.r, composite.g, composite.b]) {
     const { counts, data } = rleChannel(plane, W, H);
@@ -560,7 +775,7 @@ function buildPSD(W, H, layers, composite) {
   return psd.out();
 }
 
-/* ==================================================================== UI */
+/* ========================================================================= UI */
 function buildFolders() {
   const host = document.getElementById("folders");
   host.innerHTML = "";
@@ -578,8 +793,8 @@ function buildFolders() {
         <input type="range" min="0" max="90" step="1" value="${f.angle}" data-a="${fi}">
         <span class="val">${f.angle}&deg;</span></label>
       <label><span>Offset</span>
-        <input type="range" min="-8" max="8" step="1" value="${f.dx}" data-o="${fi}">
-        <span class="val">${f.dx}</span></label>
+        <input type="range" min="-2" max="2" step="0.1" value="${f.off}" data-o="${fi}">
+        <span class="val">${f.off.toFixed(1)}mm</span></label>
       <div class="thumbs" data-t="${fi}"></div>
       ${f.items.length ? "" : '<div class="empty">Click here, then drop images.</div>'}`;
     el.onclick = e => { if (e.target.closest("input,.thumb")) return; S.active = fi; buildFolders(); };
@@ -601,8 +816,8 @@ function buildFolders() {
     const f = S.folders[+e.target.dataset.a]; f.angle = +e.target.value;
     e.target.nextElementSibling.textContent = f.angle + "°"; draw(); });
   host.querySelectorAll("[data-o]").forEach(i => i.oninput = e => {
-    const f = S.folders[+e.target.dataset.o]; f.dx = f.dy = +e.target.value;
-    e.target.nextElementSibling.textContent = f.dx; draw(); });
+    const f = S.folders[+e.target.dataset.o]; f.off = +e.target.value;
+    e.target.nextElementSibling.textContent = f.off.toFixed(1) + "mm"; draw(); });
 
   updatePeaks();
 }
@@ -611,36 +826,43 @@ function buildSel() {
   const box = document.getElementById("selbox");
   const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
   if (!it) { box.innerHTML = '<div class="empty">Nothing selected. Click an image on the page.</div>'; return; }
-  const pct = Math.round(it.w / it.img.naturalWidth * 100);
+  const eff = Math.round(it.img.naturalWidth / it.w);
   box.innerHTML = `
-    <label><span>Size</span>
-      <input type="range" id="sz" min="5" max="200" step="1" value="${clamp(pct,5,200)}">
-      <span class="val" id="szv">${pct}%</span></label>
+    <label><span>Width</span>
+      <input type="number" id="sw" min="0.2" max="60" step="0.05" value="${it.w.toFixed(2)}"> in</label>
     <label><span>Rotate</span>
       <input type="range" id="rt" min="-180" max="180" step="1" value="${it.rot|0}">
       <span class="val" id="rtv">${it.rot|0}&deg;</span></label>
     <div class="row" style="margin-top:8px">
-      <button id="rt0">Reset&nbsp;0&deg;</button>
+      <button id="rt0">0&deg;</button>
+      <button id="fit">Fit page</button>
       <button id="mv">To ${S.folders[1 - S.sel.f].name}</button>
       <button id="del">Delete</button>
     </div>
-    <div class="note">Rotating turns the photo, not the screen &mdash; the dot
-      grid stays locked to the page.</div>`;
+    <div class="note">Effective resolution
+      <b style="color:${eff < 150 ? "var(--bad)" : eff < 250 ? "var(--warn)" : "var(--ok)"}">${eff} ppi</b>
+      at this size. Rotating turns the photo, not the screen.</div>`;
 
-  document.getElementById("sz").oninput = e => {
-    const p = +e.target.value / 100;
+  const resize = (wIn) => {
     const cx = it.x + it.w/2, cy = it.y + it.h/2;
-    it.w = it.img.naturalWidth * p; it.h = it.img.naturalHeight * p;
+    const ar = it.h / it.w;
+    it.w = clamp(wIn, 0.2, 60); it.h = it.w * ar;
     it.x = cx - it.w/2; it.y = cy - it.h/2;
-    document.getElementById("szv").textContent = Math.round(p*100) + "%";
-    draw();
   };
+  document.getElementById("sw").oninput = e => { resize(+e.target.value); draw(); };
+  document.getElementById("sw").onchange = () => buildSel();
   document.getElementById("rt").oninput = e => {
     it.rot = +e.target.value;
-    document.getElementById("rtv").textContent = it.rot + "°";
-    draw();
+    document.getElementById("rtv").textContent = it.rot + "°"; draw();
   };
   document.getElementById("rt0").onclick = () => { it.rot = 0; buildSel(); draw(); };
+  document.getElementById("fit").onclick = () => {
+    const ar = it.h / it.w;
+    if (S.pageIn.w * ar <= S.pageIn.h) { it.w = S.pageIn.w; it.h = it.w * ar; }
+    else { it.h = S.pageIn.h; it.w = it.h / ar; }
+    it.x = (S.pageIn.w - it.w)/2; it.y = (S.pageIn.h - it.h)/2;
+    buildSel(); draw();
+  };
   document.getElementById("mv").onclick = () => {
     const from = S.sel.f, to = 1 - from;
     const [m] = S.folders[from].items.splice(S.sel.i, 1);
@@ -654,11 +876,11 @@ function buildSel() {
   };
 }
 
-/* ============================================================== pointer */
-function toPage(e) {
+/* ==================================================================== pointer */
+function toIn(e) {
   const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left) * (cv.width / r.width),
-           y: (e.clientY - r.top)  * (cv.height / r.height) };
+  return { x: (e.clientX - r.left) / r.width  * S.pageIn.w,
+           y: (e.clientY - r.top)  / r.height * S.pageIn.h };
 }
 
 function inside(it, p) {
@@ -672,14 +894,13 @@ function inside(it, p) {
 function hit(p) {
   for (let fi = S.folders.length - 1; fi >= 0; fi--) {
     const items = S.folders[fi].items;
-    for (let i = items.length - 1; i >= 0; i--)
-      if (inside(items[i], p)) return { f: fi, i };
+    for (let i = items.length - 1; i >= 0; i--) if (inside(items[i], p)) return { f: fi, i };
   }
   return null;
 }
 
 cv.addEventListener("pointerdown", e => {
-  const p = toPage(e), h = hit(p);
+  const p = toIn(e), h = hit(p);
   S.sel = h;
   if (h) {
     const it = S.folders[h.f].items[h.i];
@@ -693,7 +914,7 @@ cv.addEventListener("pointerdown", e => {
 
 cv.addEventListener("pointermove", e => {
   if (!dragging) return;
-  const p = toPage(e), it = S.folders[dragging.f].items[dragging.i];
+  const p = toIn(e), it = S.folders[dragging.f].items[dragging.i];
   it.x = p.x - dragging.ox; it.y = p.y - dragging.oy;
   draw();
 });
@@ -704,13 +925,12 @@ cv.addEventListener("wheel", e => {
   const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
   if (!it) return;
   e.preventDefault();
-  if (e.shiftKey) {                                  // shift+wheel = rotate
+  if (e.shiftKey) {
     it.rot = ((it.rot || 0) + (e.deltaY < 0 ? 2 : -2) + 540) % 360 - 180;
   } else {
     const k = e.deltaY < 0 ? 1.06 : 1/1.06;
-    const cx = it.x + it.w/2, cy = it.y + it.h/2;
-    it.w = clamp(it.w * k, 24, S.page.w * 4);
-    it.h = it.w * (it.img.naturalHeight / it.img.naturalWidth);
+    const cx = it.x + it.w/2, cy = it.y + it.h/2, ar = it.h / it.w;
+    it.w = clamp(it.w * k, 0.2, 60); it.h = it.w * ar;
     it.x = cx - it.w/2; it.y = cy - it.h/2;
   }
   buildSel(); draw();
@@ -725,15 +945,14 @@ addEventListener("keydown", e => {
     S.folders[S.sel.f].items.splice(S.sel.i, 1);
     S.sel = null; buildFolders(); buildSel(); draw(); return;
   }
-  if (e.key === "," || e.key === ".") {               // rotate
+  if (e.key === "," || e.key === ".") {
     e.preventDefault();
-    const d = (e.key === "." ? 1 : -1) * (e.shiftKey ? 15 : 1);
-    it.rot = ((it.rot || 0) + d + 540) % 360 - 180;
+    it.rot = ((it.rot || 0) + (e.key === "." ? 1 : -1) * (e.shiftKey ? 15 : 1) + 540) % 360 - 180;
     buildSel(); draw(); return;
   }
   if (e.key.startsWith("Arrow")) {
     e.preventDefault();
-    const d = e.shiftKey ? 10 : 1;
+    const d = (e.shiftKey ? 10 : 1) / 96;            // ~1 screen px steps, in inches
     if (e.key === "ArrowLeft")  it.x -= d;
     if (e.key === "ArrowRight") it.x += d;
     if (e.key === "ArrowUp")    it.y -= d;
@@ -742,7 +961,7 @@ addEventListener("keydown", e => {
   }
 });
 
-/* =========================================================== drag & drop */
+/* ================================================================ drag & drop */
 addEventListener("dragover",  e => { e.preventDefault(); document.body.classList.add("dragover"); });
 addEventListener("dragleave", e => { if (e.relatedTarget === null) document.body.classList.remove("dragover"); });
 addEventListener("drop", e => {
@@ -750,7 +969,7 @@ addEventListener("drop", e => {
   document.body.classList.remove("dragover");
   const r = cv.getBoundingClientRect();
   const on = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-  const p = on ? toPage(e) : { x: S.page.w/2, y: S.page.h/2 };
+  const p = on ? toIn(e) : { x: S.pageIn.w/2, y: S.pageIn.h/2 };
   loadFiles(e.dataTransfer.files, p.x, p.y);
 });
 addEventListener("paste", e => {
@@ -758,93 +977,132 @@ addEventListener("paste", e => {
   if (f.length) loadFiles(f);
 });
 
-/* ============================================================== controls */
-const bind = (id, fn, label) => {
-  const el = document.getElementById(id);
-  el.oninput = () => { fn(el.value); if (label) document.getElementById(label).textContent = el.value; draw(); };
-};
-bind("cell",  v => S.cell  = +v,       "cellv");
-bind("cover", v => S.cover = +v / 100, "coverv");
-bind("grain", v => S.grain = +v,       "grainv");
-document.getElementById("paper").oninput = e => { S.paper = e.target.value; draw(); };
-document.getElementById("preset").onchange = e => {
-  const [w, h] = e.target.value.split("x").map(Number);
-  S.page = { w, h }; draw();
+/* =================================================================== controls */
+const $ = id => document.getElementById(id);
+
+$("lpi").oninput = e => { S.lpi = +e.target.value; $("lpiv").textContent = S.lpi + " lpi"; draw(); };
+$("cover").oninput = e => { S.cover = +e.target.value/100; $("coverv").textContent = e.target.value + "%"; draw(); };
+$("grain").oninput = e => { S.grain = +e.target.value; $("grainv").textContent = e.target.value; draw(); };
+$("paper").oninput = e => { S.paper = e.target.value; draw(); };
+$("dpi").onchange  = e => { S.dpi = +e.target.value; draw(); };
+
+$("preset").onchange = e => {
+  if (e.target.value === "custom") {
+    document.body.classList.add("customsize");
+    $("pw").value = S.pageIn.w.toFixed(2);
+    $("ph").value = S.pageIn.h.toFixed(2);
+  } else {
+    document.body.classList.remove("customsize");
+    const [w, h] = e.target.value.split("x").map(Number);
+    S.pageIn = { w, h };
+  }
+  draw();
 };
 
-/* ================================================================ export */
+// accepts "11.69", "297mm", "29.7cm"
+function parseLen(str, fallback) {
+  const s = String(str).trim().toLowerCase();
+  const n = parseFloat(s);
+  if (!isFinite(n) || n <= 0) return fallback;
+  if (s.endsWith("mm")) return n / 25.4;
+  if (s.endsWith("cm")) return n / 2.54;
+  return n;
+}
+["pw", "ph"].forEach(id => {
+  const el = $(id);
+  const apply = () => {
+    const v = clamp(parseLen(el.value, id === "pw" ? S.pageIn.w : S.pageIn.h), 1, 40);
+    if (id === "pw") S.pageIn.w = v; else S.pageIn.h = v;
+    draw();
+  };
+  el.oninput = apply;
+  el.onchange = () => { apply(); el.value = (id === "pw" ? S.pageIn.w : S.pageIn.h).toFixed(2); };
+});
+
+/* ===================================================================== export */
 function saveBlob(blob, name) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
+  a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 const savePng = (canvas, name) => canvas.toBlob(b => saveBlob(b, name), "image/png");
 
-document.getElementById("expPng").onclick = () => {
-  const keep = S.sel; S.sel = null; render();
-  savePng(cv, "riso.png");
-  S.sel = keep; draw();
-};
+// heavy exports: paint the busy overlay before blocking the main thread
+function busy(fn) {
+  document.body.classList.add("busy");
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    try { fn(); }
+    catch (err) { alert("Export failed:\n\n" + err.message +
+      "\n\nTry a lower export resolution."); }
+    finally { document.body.classList.remove("busy"); }
+  }));
+}
 
-document.getElementById("expPlates").onclick = () => {
+$("expPng").onclick = () => busy(() => {
+  const out = document.createElement("canvas");
+  renderPage(S.dpi, out, false);
+  savePng(out, "riso.png");
+});
+
+$("expPlates").onclick = () => busy(() => {
+  const { W, H, cell } = geom(S.dpi);
   S.folders.forEach((f, i) => {
     if (!f.items.length) return;
-    const { canvas } = halftone(densityOf(f), f, S.cell, "#000000");
+    const { canvas } = halftone(densityOf(f, S.dpi, W, H), f, S.dpi, W, H, cell, "#000000");
     const out = document.createElement("canvas");
-    out.width = S.page.w; out.height = S.page.h;
+    out.width = W; out.height = H;
     const g = out.getContext("2d");
-    g.fillStyle = "#fff"; g.fillRect(0, 0, out.width, out.height);
+    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
     g.drawImage(canvas, 0, 0);
     savePng(out, `plate-${i+1}-${f.name.replace(/\s+/g, "")}.png`);
   });
-};
+});
 
 function docToPSD() {
-  const { w, h } = S.page;
-  const keep = S.sel; S.sel = null; render();          // composite without the outline
+  const { W, H, cell } = geom(S.dpi);
   const layers = [];
 
   const paper = document.createElement("canvas");
-  paper.width = w; paper.height = h;
+  paper.width = W; paper.height = H;
   const pg = paper.getContext("2d");
-  pg.fillStyle = S.paper; pg.fillRect(0, 0, w, h);
-  layers.push({ name: "PAPER", blend: "norm", opacity: 255, planes: planesOf(paper, w, h) });
+  pg.fillStyle = S.paper; pg.fillRect(0, 0, W, H);
+  layers.push({ name: "PAPER", blend: "norm", opacity: 255, planes: planesOf(paper, W, H) });
 
   for (const f of S.folders) {
     if (!f.items.length) continue;
-    const { canvas } = halftone(densityOf(f), f, S.cell, f.color);
+    const { canvas } = halftone(densityOf(f, S.dpi, W, H), f, S.dpi, W, H, cell, f.color);
     const off = document.createElement("canvas");
-    off.width = w; off.height = h;
-    off.getContext("2d").drawImage(canvas, f.dx, f.dy);
-    layers.push({ name: f.name, blend: "mul ", opacity: 255, planes: planesOf(off, w, h) });
+    off.width = W; off.height = H;
+    off.getContext("2d").drawImage(canvas, f.off / 25.4 * S.dpi, f.off / 25.4 * S.dpi);
+    layers.push({ name: f.name, blend: "mul ", opacity: 255, planes: planesOf(off, W, H) });
   }
 
   if (S.grain > 0) {
     if (!grainTile) grainTile = makeGrain();
     const gc = document.createElement("canvas");
-    gc.width = w; gc.height = h;
+    gc.width = W; gc.height = H;
     const gg = gc.getContext("2d");
     gg.fillStyle = gg.createPattern(grainTile, "repeat");
-    gg.fillRect(0, 0, w, h);
+    gg.fillRect(0, 0, W, H);
     layers.push({ name: "PAPER GRAIN", blend: "over",
-                  opacity: Math.round(S.grain / 100 * 255), planes: planesOf(gc, w, h) });
+                  opacity: Math.round(S.grain/100*255), planes: planesOf(gc, W, H) });
   }
 
-  const bytes = buildPSD(w, h, layers, planesOf(cv, w, h));
-  S.sel = keep; draw();
-  return bytes;
+  const flat = document.createElement("canvas");
+  renderPage(S.dpi, flat, false);
+  return buildPSD(W, H, layers, planesOf(flat, W, H), S.dpi);
 }
 
-document.getElementById("expPsd").onclick = () => {
+$("expPsd").onclick = () => busy(() => {
   saveBlob(new Blob([docToPSD()], { type: "image/vnd.adobe.photoshop" }), "riso.psd");
-};
+});
 
-/* ================================================================== boot */
+/* ======================================================================= boot */
 buildFolders(); buildSel(); draw();
 
-window.__riso = { S, addImage, render, buildPSD, docToPSD, parsePSD, planesOf, packBits,
+window.__riso = { S, addImage, render, renderPage, geom, previewDpi, docToPSD,
+  parsePSD, parsePSDLayers, buildPSD, planesOf, packBits, parseLen,
   loadURL(url, f) { const img = new Image(); img.onload = () => addImage(img, f ?? S.active); img.src = url; } };
 </script>
 </body>

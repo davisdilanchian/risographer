@@ -1,7 +1,7 @@
 # Risographer
 
 A browser tool that makes photos look risograph-printed. Drop images into one of
-two ink folders, move and rotate them around a page-size canvas, done. No
+two ink folders, move and rotate them around a Letter/A3/custom canvas, done. No
 install, no account, nothing uploaded — it's one HTML file that runs entirely in
 your browser.
 
@@ -31,15 +31,30 @@ drop in or where you put it. There is nothing to re-apply, ever.
 | | |
 |---|---|
 | Move | drag |
-| Resize | scroll, or the Size slider |
+| Resize | scroll, or the Width field (in inches) |
 | Rotate | `Shift`+scroll, `,` / `.` keys (`Shift` = 15°), or the Rotate slider |
-| Nudge | arrow keys (`Shift` = 10px) |
+| Nudge | arrow keys (`Shift` = 10×) |
 | Delete | `Delete` / `Backspace` |
-| Switch ink | the "To INK 2" button |
+| Switch ink | the "To PINK" / "To BLUE" button |
 
 Each folder has its own **ink colour**, **screen angle** and **misregistration
-offset**. Keep the two angles at least 30° apart or the overlap will moiré — 15°
-and 45° is the default and is what most riso studios use.
+offset** (in mm). Keep the two angles at least 30° apart or the overlap will
+moiré — 45° and 15° is the default and is what most riso studios use.
+
+## Page sizes and units
+
+Letter, A3, A4, A5, square, or **Custom** in inches. The custom fields also take
+metric — type `297mm` or `29.7cm` and it converts.
+
+Everything geometric is stored in **inches**, not pixels, so changing the page
+size or the export resolution never moves or rescales your layout. Dot pitch is
+in **lines per inch** for the same reason: exporting at 600 dpi instead of 300
+gives you a sharper file of *the same print*, not different-looking dots. (The
+dot count is literally identical at 150, 300 and 600 dpi.)
+
+The on-screen preview caps itself at about 2 megapixels — A3 previews at ~107 dpi
+— so dragging stays smooth no matter how big the page is. Exports always use the
+full resolution you picked.
 
 ## Can you print 100% solid colour?
 
@@ -70,13 +85,25 @@ though very heavy total coverage will still smudge.
 
 ## Importing PSDs
 
-Drop a `.psd` on the page and it comes in as artwork. It reads the **flattened
-composite** that Photoshop writes into every PSD saved with *Maximize
-Compatibility* on (the default). RGB and Greyscale, 8-bit, RLE or uncompressed.
+Drop a `.psd` on the page and **each layer comes in as its own draggable image**,
+keeping its position relative to the others. Move them apart, put them in
+different ink folders, rotate them independently.
 
-It does **not** split a PSD's layers into the two ink folders — that's a much
-bigger job, since modern PSDs ZIP their layer data. 16-bit, CMYK, Lab and PSB
-files are rejected with a message telling you what to change.
+- Raw, PackBits (RLE) and **ZIP**-compressed layer data — modern Photoshop uses
+  ZIP, so this matters
+- Layer groups and hidden layers are skipped; adjustment layers (no pixels) too
+- Unicode layer names are read where present
+- If the PSD records a sane resolution it's placed at true physical size,
+  otherwise fitted to the page
+- If layer parsing fails for any reason it falls back to the flattened composite,
+  so a weird PSD still imports rather than erroring
+
+16-bit, CMYK, Lab and PSB files are rejected with a message telling you what to
+change.
+
+Verified against [psd-tools](https://github.com/psd-tools/psd-tools): on fixtures
+covering both RLE and ZIP, the parser returns identical layer names, bounds and
+pixel values.
 
 ## Exporting
 

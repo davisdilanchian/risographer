@@ -58,9 +58,30 @@ v1 shipped and verified live.
   with clear messages. Does NOT split layers into folders (modern PSDs ZIP layer
   data -- would need an inflate path).
 
+## v3 (2026-08-27, same day)
+- Inks swapped to Davis's: BLUE #0177bd @45deg, PINK #ff48b0 @15deg. Folders
+  renamed to match, so plate exports are plate-1-BLUE.png etc.
+- ALL geometry moved to INCHES (was page pixels). Page size and export dpi are
+  now pure view settings -- changing either never moves or rescales the layout.
+  Verified: switching Letter -> A3 leaves every item's x/y/w byte-identical.
+- Dot pitch is now LPI, not px. Verified resolution-independent: dot count is
+  identical (102) at 150 / 300 / 600 dpi.
+- Page presets Letter/A4/A3/A5/Square + Custom in inches; custom fields also
+  parse "297mm" and "29.7cm".
+- Export dpi selector 150/300/600 with a live px + megapixel readout that warns
+  above 18MP and 40MP. Preview auto-caps at ~2.2MP (A3 previews at ~107 dpi) so
+  dragging stays smooth; exports use full resolution. Busy overlay on export.
+- PSD import now brings in EACH LAYER as its own draggable item, preserving
+  relative position. Handles raw / PackBits / ZIP (via DecompressionStream) and
+  ZIP-with-prediction; skips groups, hidden and adjustment layers; reads luni
+  unicode names and resource 1005 for true physical placement; falls back to the
+  flattened composite if layer parsing throws.
+  VERIFIED against psd-tools on RLE + ZIP fixtures: identical names, bounds and
+  pixel means.
+- PSD export now writes resource 1005 so Photoshop opens it at the right size.
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
-- Possible: split an imported PSD's layers across the two ink folders
 
 ## Future goals
 - More than two folders (three-ink riso, 75° screen angle is already reserved)
