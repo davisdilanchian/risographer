@@ -347,6 +347,12 @@ function halftone(den, folder, dpi, W, H, cell, inkColor) {
       // alone never fills solid (circles on a square lattice leave corner gaps
       // until r hits cell/sqrt(2) = 0.707), so ramp the factor across the top of
       // the range: exact in midtones, genuinely solid at max ink.
+      //
+      // Do NOT "correct" this for canvas antialiasing. Measured against mean
+      // luminance, ink laid down is already flat across the whole pitch range
+      // (spread 0.04 from 15 to 80 lpi). An earlier attempt to compensate was
+      // chasing a bad metric -- counting pixels past a darkness threshold
+      // measures dot visibility, not ink -- and made tone fade 4x at high pitch.
       const f = 0.5642 + 0.1428 * clamp((d - 0.7) / 0.3, 0, 1);
       const r = cell * f * Math.sqrt(d);
       if (r < 0.12) continue;
