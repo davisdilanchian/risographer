@@ -37,10 +37,30 @@ v1 shipped and verified live.
   fails because the second Color Burn operates on the already-inked composite.
   Also costs a Ctrl+[ per image, which is what motivated building this instead.
 
+## v2 (2026-08-27, same day)
+- Rotation: per-item `rot`, applied when rasterising into the density map so the
+  screen stays page-locked. Hit-testing inverse-rotates. Shift+wheel, , / . keys,
+  or the slider. Verified: rotating 90 deg moved the test bar out of the sampled
+  region and hit-testing at +290px flipped false -> true.
+- Ink limit default lowered 88 -> 80, plus a live per-folder "peak ink" readout
+  (green <85, amber <=90, red above). Riso studios cap at 75-85% per ink; a true
+  100% solid causes roller marks, smudging and jams. Answered in the README with
+  sources.
+- PSD export: hand-written PSD writer (PackBits RLE, big-endian). Layers are
+  PAPER (normal), one Multiply layer per ink, PAPER GRAIN (overlay, opacity from
+  the grain slider), plus the merged composite.
+  VERIFIED with psd-tools (independent lib): all 4 layers, exact blend modes,
+  exact ink RGB, and re-rendering the layer stack vs the stored composite gives
+  max abs difference 0 across the page. Pillow mis-reads it -- that's Pillow's
+  rudimentary PSD layer support, confirmed by hand-decoding the channel data.
+- PSD import: parses the flattened composite. RGB + Greyscale, 8-bit, RLE + raw
+  both verified against hand-built fixture PSDs; 16-bit / CMYK / PSB rejected
+  with clear messages. Does NOT split layers into folders (modern PSDs ZIP layer
+  data -- would need an inflate path).
+
 ## Next steps
 - Davis to run real photos through it and report how the defaults read
-- Likely tuning: default dot size, and whether the slight dot-gain bias wants
-  pulling back
+- Possible: split an imported PSD's layers across the two ink folders
 
 ## Future goals
 - More than two folders (three-ink riso, 75° screen angle is already reserved)

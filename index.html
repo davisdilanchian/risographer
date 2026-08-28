@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Riso Press</title>
+<title>Risographer</title>
 <style>
   :root{
     --bg:#1c1c1f; --panel:#252529; --panel2:#2e2e33; --line:#3a3a41;
     --tx:#e8e8ea; --tx2:#9a9aa2; --acc:#ff665e;
+    --ok:#4ec77f; --warn:#e8b64c; --bad:#ff6b5e;
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
@@ -16,12 +17,8 @@
     font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
     overflow:hidden;
   }
-
-  /* ---------- sidebar ---------- */
-  #side{
-    width:290px; flex:0 0 290px; background:var(--panel);
-    border-right:1px solid var(--line); overflow-y:auto; padding:14px;
-  }
+  #side{width:300px;flex:0 0 300px;background:var(--panel);
+    border-right:1px solid var(--line);overflow-y:auto;padding:14px}
   h1{font-size:14px;margin:0 0 2px;letter-spacing:.02em}
   .sub{color:var(--tx2);font-size:11px;margin-bottom:14px}
   .sec{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
@@ -29,16 +26,12 @@
     color:var(--tx2);margin:0 0 9px;font-weight:600}
   label{display:flex;align-items:center;justify-content:space-between;
     gap:8px;margin-bottom:7px;color:var(--tx2);font-size:12px}
-  label>span:first-child{white-space:nowrap}
-  input[type=range]{width:120px;accent-color:var(--acc)}
-  input[type=number]{width:56px;background:var(--panel2);border:1px solid var(--line);
-    color:var(--tx);border-radius:4px;padding:3px 5px;font:inherit;font-size:12px}
+  input[type=range]{width:110px;accent-color:var(--acc)}
   input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);
     border-radius:4px;background:none;cursor:pointer}
   select{background:var(--panel2);border:1px solid var(--line);color:var(--tx);
     border-radius:4px;padding:3px 5px;font:inherit;font-size:12px}
-  .val{color:var(--tx);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
-
+  .val{color:var(--tx);min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
   button{background:var(--panel2);border:1px solid var(--line);color:var(--tx);
     border-radius:5px;padding:6px 9px;font:inherit;font-size:12px;cursor:pointer}
   button:hover{background:#3a3a41}
@@ -46,50 +39,48 @@
   button.pri:hover{filter:brightness(1.1)}
   .row{display:flex;gap:6px}
   .row>*{flex:1}
-
-  /* ---------- folders ---------- */
   .folder{border:1px solid var(--line);border-radius:7px;padding:10px;
-    margin-bottom:9px;background:var(--panel2);cursor:pointer;transition:border-color .12s}
+    margin-bottom:9px;background:var(--panel2);cursor:pointer}
   .folder.active{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
   .fhead{display:flex;align-items:center;gap:8px;margin-bottom:9px}
   .fname{font-weight:600;font-size:12px;flex:1}
-  .badge{font-size:10px;color:var(--tx2);background:var(--bg);
-    padding:2px 6px;border-radius:20px}
+  .badge{font-size:10px;color:var(--tx2);background:var(--bg);padding:2px 6px;border-radius:20px}
+  .peak{font-size:11px;font-variant-numeric:tabular-nums;padding:2px 6px;
+    border-radius:20px;background:var(--bg)}
   .thumbs{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
   .thumb{width:40px;height:40px;border-radius:4px;object-fit:cover;
     border:2px solid transparent;cursor:pointer;background:#000}
   .thumb.sel{border-color:var(--acc)}
   .empty{color:var(--tx2);font-size:11px;font-style:italic;margin-top:7px}
-
-  /* ---------- stage ---------- */
+  .note{color:var(--tx2);font-size:11px;margin-top:6px}
   #stage{flex:1;display:flex;align-items:center;justify-content:center;
     overflow:auto;padding:26px;position:relative}
   #wrap{position:relative;box-shadow:0 6px 34px rgba(0,0,0,.55);line-height:0}
-  canvas{display:block;max-width:100%;max-height:calc(100vh - 52px);
-    width:auto;height:auto}
-  #hint{position:absolute;inset:0;display:flex;align-items:center;
-    justify-content:center;pointer-events:none;color:#8a8a92;
-    font-size:15px;text-align:center;padding:30px}
+  canvas{display:block;max-width:100%;max-height:calc(100vh - 52px);width:auto;height:auto}
+  #hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    pointer-events:none;color:#8a8a92;font-size:15px;text-align:center;padding:30px}
   #drop{position:absolute;inset:0;border:3px dashed var(--acc);
     background:rgba(255,102,94,.09);display:none;pointer-events:none;z-index:5}
   body.dragover #drop{display:block}
   #stat{position:absolute;left:14px;bottom:10px;color:#6c6c74;font-size:11px}
+  #busy{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(28,28,31,.75);color:var(--tx);font-size:14px;z-index:9}
+  body.busy #busy{display:flex}
 </style>
 </head>
 <body>
 
 <div id="side">
-  <h1>Riso Press</h1>
-  <div class="sub">Drop images into a folder. The halftone screen is fixed to the
-    page, not the image &mdash; move things around and they slide through it.</div>
+  <h1>Risographer</h1>
+  <div class="sub">Drop images (or a .psd) into a folder. The halftone screen is
+    fixed to the page, not the image &mdash; move things around and they slide
+    through it.</div>
 
   <div id="folders"></div>
 
   <div class="sec">
     <h2>Selected image</h2>
-    <div id="selbox">
-      <div class="empty">Nothing selected.</div>
-    </div>
+    <div id="selbox"><div class="empty">Nothing selected.</div></div>
   </div>
 
   <div class="sec">
@@ -98,8 +89,11 @@
       <input type="range" id="cell" min="3" max="24" step="1" value="7">
       <span class="val" id="cellv">7</span></label>
     <label><span>Ink limit</span>
-      <input type="range" id="cover" min="50" max="100" step="1" value="88">
-      <span class="val" id="coverv">88</span></label>
+      <input type="range" id="cover" min="40" max="100" step="1" value="80">
+      <span class="val" id="coverv">80</span></label>
+    <div class="note">Riso studios advise a max of <b>75&ndash;85%</b> per ink.
+      A true 100% solid causes roller marks, smudging and jams. 80% is the
+      safe default.</div>
   </div>
 
   <div class="sec">
@@ -123,10 +117,12 @@
     <h2>Export</h2>
     <div class="row" style="margin-bottom:6px">
       <button class="pri" id="expPng">PNG</button>
+      <button id="expPsd">PSD</button>
       <button id="expPlates">Plates</button>
     </div>
-    <div style="color:var(--tx2);font-size:11px">
-      Plates exports one black-on-white file per folder for a print shop.</div>
+    <div class="note"><b>PSD</b> keeps each ink as its own Multiply layer.
+      <b>Plates</b> writes one black-on-white file per ink, which is what a
+      print shop wants.</div>
   </div>
 </div>
 
@@ -137,39 +133,33 @@
     <div id="drop"></div>
   </div>
   <div id="stat"></div>
+  <div id="busy">Reading PSD&hellip;</div>
 </div>
 
 <script>
 "use strict";
 
-// ------------------------------------------------------------------ state
+/* ==================================================================== state */
 const S = {
   page: { w: 1275, h: 1650 },
   paper: "#f7f3ea",
   cell: 7,
-  cover: 0.88,
+  cover: 0.80,
   grain: 12,
   active: 0,
-  sel: null,                      // {f, i}
+  sel: null,
   folders: [
-    { name: "INK 1", color: "#ff665e", angle: 15, dx: 0, dy: 0, items: [] },
-    { name: "INK 2", color: "#00a95c", angle: 45, dx: 2, dy: 2, items: [] }
+    { name: "INK 1", color: "#ff665e", angle: 15, dx: 0, dy: 0, items: [], peak: 0 },
+    { name: "INK 2", color: "#00a95c", angle: 45, dx: 2, dy: 2, items: [], peak: 0 }
   ]
 };
 
 const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
-let grainTile = null;
-let dragging = null;             // {f,i,ox,oy}
-let fast = false;
+let grainTile = null, dragging = null, fast = false;
 
-// ------------------------------------------------------------- utilities
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-
-function hexToRgb(h) {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
+const RAD = Math.PI / 180;
 
 function makeGrain() {
   const n = 256, c = document.createElement("canvas");
@@ -184,16 +174,20 @@ function makeGrain() {
   return c;
 }
 
-// ------------------------------------------------- density map per folder
-// Composites every image in a folder into a page-size ink-density buffer.
-// density = (1 - luminance) * alpha.  No image => 0 => no ink.
+/* ============================================================ density map */
+// Composites a folder's images into a page-size ink-density buffer.
 function densityOf(folder) {
   const { w, h } = S.page;
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
   const g = c.getContext("2d", { willReadFrequently: true });
-  for (const it of folder.items) g.drawImage(it.img, it.x, it.y, it.w, it.h);
-
+  for (const it of folder.items) {
+    g.save();
+    g.translate(it.x + it.w / 2, it.y + it.h / 2);
+    if (it.rot) g.rotate(it.rot * RAD);
+    g.drawImage(it.img, -it.w / 2, -it.h / 2, it.w, it.h);
+    g.restore();
+  }
   const px = g.getImageData(0, 0, w, h).data;
   const den = new Float32Array(w * h);
   for (let i = 0, p = 0; i < den.length; i++, p += 4) {
@@ -205,10 +199,10 @@ function densityOf(folder) {
   return den;
 }
 
-// ------------------------------------------------------------- halftoning
-// The lattice is generated in PAGE space, anchored at the page origin, so the
-// dot grid never moves when an image moves. Two images in one folder therefore
-// share a single continuous screen -- which is the whole point.
+/* ============================================================== halftoning */
+// The lattice is generated in PAGE space from the page origin, so the dot grid
+// never moves when an image moves or rotates. Rotating a photo turns the photo,
+// not its screen -- same as a real press.
 function halftone(den, folder, cell, inkColor) {
   const { w, h } = S.page;
   const c = document.createElement("canvas");
@@ -216,19 +210,16 @@ function halftone(den, folder, cell, inkColor) {
   const g = c.getContext("2d");
   g.fillStyle = inkColor;
 
-  const a = folder.angle * Math.PI / 180;
-  const cs = Math.cos(a), sn = Math.sin(a);
-
-  // page corners -> screen space, to find which lattice cells we need
+  const a = folder.angle * RAD, cs = Math.cos(a), sn = Math.sin(a);
   let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity;
   for (const [x, y] of [[0,0],[w,0],[0,h],[w,h]]) {
-    const u =  x*cs + y*sn, v = -x*sn + y*cs;
+    const u = x*cs + y*sn, v = -x*sn + y*cs;
     if (u < uMin) uMin = u; if (u > uMax) uMax = u;
     if (v < vMin) vMin = v; if (v > vMax) vMax = v;
   }
 
   const step = fast ? Math.max(2, cell >> 1) : Math.max(1, cell >> 2);
-  let drawn = 0;
+  let drawn = 0, peak = 0;
 
   g.beginPath();
   for (let vi = Math.floor(vMin/cell) - 1; vi <= Math.ceil(vMax/cell) + 1; vi++) {
@@ -241,8 +232,7 @@ function halftone(den, folder, cell, inkColor) {
       const y0 = Math.max(0, (y - cell/2) | 0), y1 = Math.min(h - 1, (y + cell/2) | 0);
       if (x1 < x0 || y1 < y0) continue;
 
-      // cheap reject: most of a page is usually empty, so probe the corners and
-      // centre before paying for the full box average
+      // most of a page is empty; probe corners+centre before the box average
       if (!den[y0*w + x0] && !den[y0*w + x1] && !den[y1*w + x0] && !den[y1*w + x1]
           && !den[((y0+y1)>>1)*w + ((x0+x1)>>1)]) continue;
 
@@ -252,12 +242,13 @@ function halftone(den, folder, cell, inkColor) {
       if (!n) continue;
 
       const d = (sum / n) * S.cover;
+      if (d > peak) peak = d;
       if (d < 0.008) continue;
 
-      // Dot AREA must equal the tone, so r = cell*sqrt(d/PI) -> factor 0.5642.
+      // Dot AREA must equal the tone: r = cell*sqrt(d/PI), factor 0.5642.
       // That alone never fills solid (circles on a square lattice leave corner
-      // gaps until r reaches cell/sqrt(2) = 0.707), so ramp the factor up over
-      // the top of the range: exact in the midtones, genuinely solid at max ink.
+      // gaps until r hits cell/sqrt(2) = 0.707), so ramp the factor across the
+      // top of the range: exact in midtones, genuinely solid at max ink.
       const f = 0.5642 + 0.1428 * clamp((d - 0.7) / 0.3, 0, 1);
       const r = cell * f * Math.sqrt(d);
       if (r < 0.12) continue;
@@ -267,14 +258,14 @@ function halftone(den, folder, cell, inkColor) {
     }
   }
   g.fill();
+  folder.peak = peak;
   return { canvas: c, drawn };
 }
 
-// ------------------------------------------------------------------ draw
+/* ==================================================================== draw */
 function render() {
   const { w, h } = S.page;
   cv.width = w; cv.height = h;
-
   ctx.fillStyle = S.paper;
   ctx.fillRect(0, 0, w, h);
 
@@ -282,12 +273,11 @@ function render() {
   let dots = 0;
 
   for (const f of S.folders) {
-    if (!f.items.length) continue;
-    const den = densityOf(f);
-    const { canvas, drawn } = halftone(den, f, S.cell, f.color);
+    if (!f.items.length) { f.peak = 0; continue; }
+    const { canvas, drawn } = halftone(densityOf(f), f, S.cell, f.color);
     dots += drawn;
     ctx.globalCompositeOperation = "multiply";
-    ctx.drawImage(canvas, f.dx, f.dy);       // misregistration
+    ctx.drawImage(canvas, f.dx, f.dy);
     ctx.globalCompositeOperation = "source-over";
   }
 
@@ -296,21 +286,21 @@ function render() {
     ctx.save();
     ctx.globalAlpha = S.grain / 100;
     ctx.globalCompositeOperation = "overlay";
-    const p = ctx.createPattern(grainTile, "repeat");
-    ctx.fillStyle = p;
+    ctx.fillStyle = ctx.createPattern(grainTile, "repeat");
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
 
-  // selection outline
   if (S.sel) {
     const it = S.folders[S.sel.f].items[S.sel.i];
     if (it) {
       ctx.save();
+      ctx.translate(it.x + it.w/2, it.y + it.h/2);
+      if (it.rot) ctx.rotate(it.rot * RAD);
       ctx.strokeStyle = "#1e90ff";
       ctx.lineWidth = Math.max(2, w / 500);
       ctx.setLineDash([10, 7]);
-      ctx.strokeRect(it.x, it.y, it.w, it.h);
+      ctx.strokeRect(-it.w/2, -it.h/2, it.w, it.h);
       ctx.restore();
     }
   }
@@ -320,37 +310,257 @@ function render() {
   document.getElementById("stat").textContent =
     `${Math.round(performance.now() - t0)} ms · ${dots.toLocaleString()} dots` +
     (fast ? " · preview" : "");
+  updatePeaks();
+}
+
+function updatePeaks() {
+  S.folders.forEach((f, i) => {
+    const el = document.getElementById("peak" + i);
+    if (!el) return;
+    const p = Math.round(f.peak * 100);
+    el.textContent = p + "% ink";
+    el.style.color = p > 90 ? "var(--bad)" : p > 85 ? "var(--warn)" : "var(--ok)";
+    el.title = p > 85
+      ? "Above what most riso studios accept — expect roller marks and smudging. Lower the Ink limit."
+      : "Within the 75–85% range riso studios recommend.";
+  });
 }
 
 let raf = 0;
 function draw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
 
-// ------------------------------------------------------------ adding art
+/* ============================================================ adding art */
 function addImage(img, folderIndex, cx, cy) {
   const f = S.folders[folderIndex];
-  const maxW = S.page.w * 0.6;
-  const sc = Math.min(1, maxW / img.naturalWidth);
+  const sc = Math.min(1, S.page.w * 0.6 / img.naturalWidth);
   const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
   const it = {
-    img,
-    x: clamp((cx ?? S.page.w / 2) - w / 2, -w * .3, S.page.w - w * .7),
-    y: clamp((cy ?? S.page.h / 2) - h / 2, -h * .3, S.page.h - h * .7),
-    w, h
+    img, w, h, rot: 0,
+    x: clamp((cx ?? S.page.w/2) - w/2, -w*.3, S.page.w - w*.7),
+    y: clamp((cy ?? S.page.h/2) - h/2, -h*.3, S.page.h - h*.7)
   };
   f.items.push(it);
   S.sel = { f: folderIndex, i: f.items.length - 1 };
   buildFolders(); buildSel(); draw();
+  return it;
 }
 
 function loadFiles(files, cx, cy) {
-  [...files].filter(f => f.type.startsWith("image/")).forEach((file, k) => {
-    const img = new Image();
-    img.onload = () => addImage(img, S.active, (cx ?? S.page.w/2) + k*26, (cy ?? S.page.h/2) + k*26);
-    img.src = URL.createObjectURL(file);
+  [...files].forEach((file, k) => {
+    const ox = (cx ?? S.page.w/2) + k*26, oy = (cy ?? S.page.h/2) + k*26;
+    const isPsd = /\.psd$/i.test(file.name) ||
+                  file.type === "image/vnd.adobe.photoshop";
+    if (isPsd) {
+      importPSD(file, ox, oy);
+    } else if (file.type.startsWith("image/")) {
+      const img = new Image();
+      img.onload = () => addImage(img, S.active, ox, oy);
+      img.src = URL.createObjectURL(file);
+    }
   });
 }
 
-// ------------------------------------------------------------------- UI
+/* =============================================================== PSD read */
+// Reads the flattened composite that Photoshop writes at the end of every PSD
+// saved with Maximize Compatibility on (the default). Layer-by-layer import is
+// a much bigger job -- modern PSDs ZIP their layer data.
+function unpackBits(src, off, len, dst, dstOff, count) {
+  let i = off, end = off + len, p = dstOff, lim = dstOff + count;
+  while (i < end && p < lim) {
+    let n = src[i++];
+    if (n > 127) n -= 256;
+    if (n >= 0) { for (let k = 0; k <= n && p < lim; k++) dst[p++] = src[i++]; }
+    else if (n !== -128) { const v = src[i++]; for (let k = 0; k < 1 - n && p < lim; k++) dst[p++] = v; }
+  }
+}
+
+function parsePSD(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== "8BPS")
+    throw new Error("That isn't a PSD file.");
+  const ver = dv.getUint16(4);
+  if (ver !== 1) throw new Error("PSB (large document) files aren't supported — save as .psd.");
+
+  const nCh = dv.getUint16(12), H = dv.getUint32(14), W = dv.getUint32(18),
+        depth = dv.getUint16(22), mode = dv.getUint16(24);
+  if (depth !== 8) throw new Error(`This PSD is ${depth}-bit. Save it as 8-bit and try again.`);
+  if (mode !== 3 && mode !== 1)
+    throw new Error("Only RGB and Greyscale PSDs are supported (not CMYK, Lab or Indexed).");
+
+  let o = 26;
+  o += 4 + dv.getUint32(o);          // colour mode data
+  o += 4 + dv.getUint32(o);          // image resources
+  o += 4 + dv.getUint32(o);          // layer & mask info
+
+  if (o + 2 > buf.length)
+    throw new Error("This PSD has no flattened composite. Re-save it with Maximize Compatibility on.");
+
+  const comp = dv.getUint16(o); o += 2;
+  if (comp !== 0 && comp !== 1)
+    throw new Error("This PSD uses ZIP compression for its composite, which isn't supported. Re-save from Photoshop.");
+
+  const want = mode === 1 ? 1 : 3;
+  const planes = [];
+
+  if (comp === 0) {
+    for (let c = 0; c < want; c++) {
+      planes.push(buf.subarray(o + c*W*H, o + (c+1)*W*H));
+    }
+  } else {
+    const counts = new Uint16Array(nCh * H);
+    for (let i = 0; i < nCh * H; i++) { counts[i] = dv.getUint16(o); o += 2; }
+    for (let c = 0; c < nCh; c++) {
+      if (c < want) {
+        const plane = new Uint8Array(W * H);
+        for (let y = 0; y < H; y++) {
+          unpackBits(buf, o, counts[c*H + y], plane, y*W, W);
+          o += counts[c*H + y];
+        }
+        planes.push(plane);
+      } else {
+        for (let y = 0; y < H; y++) o += counts[c*H + y];
+      }
+    }
+  }
+
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const id = g.createImageData(W, H), d = id.data;
+  if (want === 1) {
+    for (let i = 0, p = 0; i < W*H; i++, p += 4) {
+      d[p] = d[p+1] = d[p+2] = planes[0][i]; d[p+3] = 255;
+    }
+  } else {
+    for (let i = 0, p = 0; i < W*H; i++, p += 4) {
+      d[p] = planes[0][i]; d[p+1] = planes[1][i]; d[p+2] = planes[2][i]; d[p+3] = 255;
+    }
+  }
+  g.putImageData(id, 0, 0);
+  return c;
+}
+
+function importPSD(file, cx, cy) {
+  document.body.classList.add("busy");
+  file.arrayBuffer().then(ab => {
+    const canvas = parsePSD(new Uint8Array(ab));
+    const img = new Image();
+    img.onload = () => { document.body.classList.remove("busy"); addImage(img, S.active, cx, cy); };
+    img.onerror = () => { document.body.classList.remove("busy"); alert("Couldn't decode that PSD."); };
+    img.src = canvas.toDataURL();
+  }).catch(e => {
+    document.body.classList.remove("busy");
+    alert("Couldn't open " + file.name + "\n\n" + e.message);
+  });
+}
+
+/* ============================================================== PSD write */
+class Buf {
+  constructor(n = 1 << 16) { this.b = new Uint8Array(n); this.n = 0; }
+  need(k) {
+    if (this.n + k <= this.b.length) return;
+    let s = this.b.length * 2;
+    while (s < this.n + k) s *= 2;
+    const nb = new Uint8Array(s); nb.set(this.b.subarray(0, this.n)); this.b = nb;
+  }
+  u8(v)  { this.need(1); this.b[this.n++] = v & 255; }
+  u16(v) { this.need(2); this.b[this.n++] = (v >> 8) & 255; this.b[this.n++] = v & 255; }
+  u32(v) { this.need(4); this.b[this.n++] = (v>>>24)&255; this.b[this.n++] = (v>>>16)&255;
+           this.b[this.n++] = (v>>>8)&255; this.b[this.n++] = v & 255; }
+  raw(a) { this.need(a.length); this.b.set(a, this.n); this.n += a.length; }
+  str(s) { for (let i = 0; i < s.length; i++) this.u8(s.charCodeAt(i)); }
+  out()  { return this.b.subarray(0, this.n); }
+}
+
+function packBits(src) {
+  const b = new Buf(src.length + (src.length >> 6) + 16);
+  let i = 0; const n = src.length;
+  while (i < n) {
+    let run = 1;
+    while (i + run < n && run < 128 && src[i + run] === src[i]) run++;
+    if (run >= 2) { b.u8(257 - run); b.u8(src[i]); i += run; continue; }
+    let lit = 1;
+    while (i + lit < n && lit < 128) {
+      if (i + lit + 1 < n && src[i + lit] === src[i + lit + 1]) break;
+      lit++;
+    }
+    b.u8(lit - 1);
+    for (let k = 0; k < lit; k++) b.u8(src[i + k]);
+    i += lit;
+  }
+  return b.out();
+}
+
+function rleChannel(plane, W, H) {
+  const counts = new Buf(H * 2), data = new Buf(W * H);
+  for (let y = 0; y < H; y++) {
+    const p = packBits(plane.subarray(y * W, (y + 1) * W));
+    counts.u16(p.length);
+    data.raw(p);
+  }
+  return { counts: counts.out(), data: data.out() };
+}
+
+function planesOf(canvas, W, H) {
+  const d = canvas.getContext("2d").getImageData(0, 0, W, H).data, n = W * H;
+  const r = new Uint8Array(n), g = new Uint8Array(n), b = new Uint8Array(n), a = new Uint8Array(n);
+  for (let i = 0, p = 0; i < n; i++, p += 4) { r[i]=d[p]; g[i]=d[p+1]; b[i]=d[p+2]; a[i]=d[p+3]; }
+  return { r, g, b, a };
+}
+
+// layers are bottom-to-top: {name, blend:'norm'|'mul '|'over', opacity, planes}
+function buildPSD(W, H, layers, composite) {
+  const psd = new Buf(1 << 20);
+  psd.str("8BPS"); psd.u16(1);
+  for (let i = 0; i < 6; i++) psd.u8(0);
+  psd.u16(3); psd.u32(H); psd.u32(W); psd.u16(8); psd.u16(3);
+  psd.u32(0);                                   // colour mode data
+  psd.u32(0);                                   // image resources
+
+  const enc = layers.map(L => [[-1, L.planes.a], [0, L.planes.r], [1, L.planes.g], [2, L.planes.b]]
+    .map(([id, plane]) => {
+      const { counts, data } = rleChannel(plane, W, H);
+      return { id, counts, data, len: 2 + counts.length + data.length };
+    }));
+
+  const li = new Buf(1 << 20);
+  li.u16(layers.length);
+  layers.forEach((L, i) => {
+    li.u32(0); li.u32(0); li.u32(H); li.u32(W);       // bounds t,l,b,r
+    li.u16(4);
+    for (const c of enc[i]) { li.u16(c.id < 0 ? 65536 + c.id : c.id); li.u32(c.len); }
+    li.str("8BIM"); li.str(L.blend);
+    li.u8(L.opacity ?? 255); li.u8(0); li.u8(0); li.u8(0);
+    const nameLen = 1 + L.name.length, pad = (4 - (nameLen % 4)) % 4;
+    li.u32(4 + 4 + nameLen + pad);
+    li.u32(0);                                        // layer mask
+    li.u32(0);                                        // blending ranges
+    li.u8(L.name.length); li.str(L.name);
+    for (let k = 0; k < pad; k++) li.u8(0);
+  });
+  layers.forEach((L, i) => {
+    for (const c of enc[i]) { li.u16(1); li.raw(c.counts); li.raw(c.data); }
+  });
+
+  const layerInfo = li.out(), padLI = layerInfo.length % 2;
+  psd.u32(4 + layerInfo.length + padLI + 4);
+  psd.u32(layerInfo.length + padLI);
+  psd.raw(layerInfo);
+  if (padLI) psd.u8(0);
+  psd.u32(0);                                         // global layer mask info
+
+  psd.u16(1);                                         // merged image: RLE
+  const allCounts = new Buf(H * 3 * 2), parts = [];
+  for (const plane of [composite.r, composite.g, composite.b]) {
+    const { counts, data } = rleChannel(plane, W, H);
+    allCounts.raw(counts); parts.push(data);
+  }
+  psd.raw(allCounts.out());
+  for (const p of parts) psd.raw(p);
+  return psd.out();
+}
+
+/* ==================================================================== UI */
 function buildFolders() {
   const host = document.getElementById("folders");
   host.innerHTML = "";
@@ -361,6 +571,7 @@ function buildFolders() {
       <div class="fhead">
         <input type="color" value="${f.color}" data-c="${fi}" title="Ink colour">
         <div class="fname">${f.name}</div>
+        <span class="peak" id="peak${fi}">0% ink</span>
         <div class="badge">${f.items.length}</div>
       </div>
       <label><span>Angle</span>
@@ -370,11 +581,8 @@ function buildFolders() {
         <input type="range" min="-8" max="8" step="1" value="${f.dx}" data-o="${fi}">
         <span class="val">${f.dx}</span></label>
       <div class="thumbs" data-t="${fi}"></div>
-      ${f.items.length ? "" : '<div class="empty">Drop images here &mdash; click this folder first.</div>'}`;
-    el.onclick = e => {
-      if (e.target.closest("input,.thumb")) return;
-      S.active = fi; buildFolders();
-    };
+      ${f.items.length ? "" : '<div class="empty">Click here, then drop images.</div>'}`;
+    el.onclick = e => { if (e.target.closest("input,.thumb")) return; S.active = fi; buildFolders(); };
     host.appendChild(el);
 
     const tw = el.querySelector(`[data-t="${fi}"]`);
@@ -387,48 +595,52 @@ function buildFolders() {
     });
   });
 
-  host.querySelectorAll("[data-c]").forEach(inp => inp.oninput = e => {
-    S.folders[+e.target.dataset.c].color = e.target.value; draw();
-  });
-  host.querySelectorAll("[data-a]").forEach(inp => inp.oninput = e => {
-    const f = S.folders[+e.target.dataset.a];
-    f.angle = +e.target.value;
-    e.target.nextElementSibling.textContent = f.angle + "°";
-    draw();
-  });
-  host.querySelectorAll("[data-o]").forEach(inp => inp.oninput = e => {
-    const f = S.folders[+e.target.dataset.o];
-    f.dx = f.dy = +e.target.value;
-    e.target.nextElementSibling.textContent = f.dx;
-    draw();
-  });
+  host.querySelectorAll("[data-c]").forEach(i => i.oninput = e => {
+    S.folders[+e.target.dataset.c].color = e.target.value; draw(); });
+  host.querySelectorAll("[data-a]").forEach(i => i.oninput = e => {
+    const f = S.folders[+e.target.dataset.a]; f.angle = +e.target.value;
+    e.target.nextElementSibling.textContent = f.angle + "°"; draw(); });
+  host.querySelectorAll("[data-o]").forEach(i => i.oninput = e => {
+    const f = S.folders[+e.target.dataset.o]; f.dx = f.dy = +e.target.value;
+    e.target.nextElementSibling.textContent = f.dx; draw(); });
+
+  updatePeaks();
 }
 
 function buildSel() {
   const box = document.getElementById("selbox");
-  if (!S.sel || !S.folders[S.sel.f].items[S.sel.i]) {
-    box.innerHTML = '<div class="empty">Nothing selected. Click an image on the page.</div>';
-    return;
-  }
-  const it = S.folders[S.sel.f].items[S.sel.i];
+  const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
+  if (!it) { box.innerHTML = '<div class="empty">Nothing selected. Click an image on the page.</div>'; return; }
   const pct = Math.round(it.w / it.img.naturalWidth * 100);
   box.innerHTML = `
     <label><span>Size</span>
       <input type="range" id="sz" min="5" max="200" step="1" value="${clamp(pct,5,200)}">
       <span class="val" id="szv">${pct}%</span></label>
+    <label><span>Rotate</span>
+      <input type="range" id="rt" min="-180" max="180" step="1" value="${it.rot|0}">
+      <span class="val" id="rtv">${it.rot|0}&deg;</span></label>
     <div class="row" style="margin-top:8px">
-      <button id="mv">Move to ${S.folders[1 - S.sel.f].name}</button>
+      <button id="rt0">Reset&nbsp;0&deg;</button>
+      <button id="mv">To ${S.folders[1 - S.sel.f].name}</button>
       <button id="del">Delete</button>
-    </div>`;
+    </div>
+    <div class="note">Rotating turns the photo, not the screen &mdash; the dot
+      grid stays locked to the page.</div>`;
 
   document.getElementById("sz").oninput = e => {
     const p = +e.target.value / 100;
-    const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
+    const cx = it.x + it.w/2, cy = it.y + it.h/2;
     it.w = it.img.naturalWidth * p; it.h = it.img.naturalHeight * p;
-    it.x = cx - it.w / 2; it.y = cy - it.h / 2;
-    document.getElementById("szv").textContent = Math.round(p * 100) + "%";
+    it.x = cx - it.w/2; it.y = cy - it.h/2;
+    document.getElementById("szv").textContent = Math.round(p*100) + "%";
     draw();
   };
+  document.getElementById("rt").oninput = e => {
+    it.rot = +e.target.value;
+    document.getElementById("rtv").textContent = it.rot + "°";
+    draw();
+  };
+  document.getElementById("rt0").onclick = () => { it.rot = 0; buildSel(); draw(); };
   document.getElementById("mv").onclick = () => {
     const from = S.sel.f, to = 1 - from;
     const [m] = S.folders[from].items.splice(S.sel.i, 1);
@@ -442,28 +654,32 @@ function buildSel() {
   };
 }
 
-// -------------------------------------------------------------- pointer
+/* ============================================================== pointer */
 function toPage(e) {
   const r = cv.getBoundingClientRect();
   return { x: (e.clientX - r.left) * (cv.width / r.width),
-           y: (e.clientY - r.top) * (cv.height / r.height) };
+           y: (e.clientY - r.top)  * (cv.height / r.height) };
+}
+
+function inside(it, p) {
+  const cx = it.x + it.w/2, cy = it.y + it.h/2;
+  const a = -(it.rot || 0) * RAD, dx = p.x - cx, dy = p.y - cy;
+  const rx = dx*Math.cos(a) - dy*Math.sin(a);
+  const ry = dx*Math.sin(a) + dy*Math.cos(a);
+  return Math.abs(rx) <= it.w/2 && Math.abs(ry) <= it.h/2;
 }
 
 function hit(p) {
   for (let fi = S.folders.length - 1; fi >= 0; fi--) {
     const items = S.folders[fi].items;
-    for (let i = items.length - 1; i >= 0; i--) {
-      const it = items[i];
-      if (p.x >= it.x && p.x <= it.x + it.w && p.y >= it.y && p.y <= it.y + it.h)
-        return { f: fi, i };
-    }
+    for (let i = items.length - 1; i >= 0; i--)
+      if (inside(items[i], p)) return { f: fi, i };
   }
   return null;
 }
 
 cv.addEventListener("pointerdown", e => {
-  const p = toPage(e);
-  const h = hit(p);
+  const p = toPage(e), h = hit(p);
   S.sel = h;
   if (h) {
     const it = S.folders[h.f].items[h.i];
@@ -477,60 +693,64 @@ cv.addEventListener("pointerdown", e => {
 
 cv.addEventListener("pointermove", e => {
   if (!dragging) return;
-  const p = toPage(e);
-  const it = S.folders[dragging.f].items[dragging.i];
-  it.x = p.x - dragging.ox;
-  it.y = p.y - dragging.oy;
+  const p = toPage(e), it = S.folders[dragging.f].items[dragging.i];
+  it.x = p.x - dragging.ox; it.y = p.y - dragging.oy;
   draw();
 });
 
-addEventListener("pointerup", () => {
-  if (!dragging) return;
-  dragging = null; fast = false; draw();
-});
+addEventListener("pointerup", () => { if (dragging) { dragging = null; fast = false; draw(); } });
 
 cv.addEventListener("wheel", e => {
-  if (!S.sel) return;
-  const it = S.folders[S.sel.f].items[S.sel.i];
+  const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
   if (!it) return;
   e.preventDefault();
-  const k = e.deltaY < 0 ? 1.06 : 1 / 1.06;
-  const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
-  it.w = clamp(it.w * k, 24, S.page.w * 4);
-  it.h = it.w * (it.img.naturalHeight / it.img.naturalWidth);
-  it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+  if (e.shiftKey) {                                  // shift+wheel = rotate
+    it.rot = ((it.rot || 0) + (e.deltaY < 0 ? 2 : -2) + 540) % 360 - 180;
+  } else {
+    const k = e.deltaY < 0 ? 1.06 : 1/1.06;
+    const cx = it.x + it.w/2, cy = it.y + it.h/2;
+    it.w = clamp(it.w * k, 24, S.page.w * 4);
+    it.h = it.w * (it.img.naturalHeight / it.img.naturalWidth);
+    it.x = cx - it.w/2; it.y = cy - it.h/2;
+  }
   buildSel(); draw();
 }, { passive: false });
 
 addEventListener("keydown", e => {
-  if (!S.sel) return;
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const it = S.sel && S.folders[S.sel.f].items[S.sel.i];
+  if (!it) return;
   if (e.key === "Delete" || e.key === "Backspace") {
-    if (/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
     e.preventDefault();
     S.folders[S.sel.f].items.splice(S.sel.i, 1);
-    S.sel = null; buildFolders(); buildSel(); draw();
+    S.sel = null; buildFolders(); buildSel(); draw(); return;
   }
-  const it = S.folders[S.sel.f]?.items[S.sel.i];
-  if (it && e.key.startsWith("Arrow")) {
+  if (e.key === "," || e.key === ".") {               // rotate
+    e.preventDefault();
+    const d = (e.key === "." ? 1 : -1) * (e.shiftKey ? 15 : 1);
+    it.rot = ((it.rot || 0) + d + 540) % 360 - 180;
+    buildSel(); draw(); return;
+  }
+  if (e.key.startsWith("Arrow")) {
     e.preventDefault();
     const d = e.shiftKey ? 10 : 1;
-    if (e.key === "ArrowLeft") it.x -= d;
+    if (e.key === "ArrowLeft")  it.x -= d;
     if (e.key === "ArrowRight") it.x += d;
-    if (e.key === "ArrowUp") it.y -= d;
-    if (e.key === "ArrowDown") it.y += d;
+    if (e.key === "ArrowUp")    it.y -= d;
+    if (e.key === "ArrowDown")  it.y += d;
     draw();
   }
 });
 
-// ------------------------------------------------------------ drag & drop
-addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragover"); });
+/* =========================================================== drag & drop */
+addEventListener("dragover",  e => { e.preventDefault(); document.body.classList.add("dragover"); });
 addEventListener("dragleave", e => { if (e.relatedTarget === null) document.body.classList.remove("dragover"); });
 addEventListener("drop", e => {
   e.preventDefault();
   document.body.classList.remove("dragover");
   const r = cv.getBoundingClientRect();
-  const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-  const p = inside ? toPage(e) : { x: S.page.w / 2, y: S.page.h / 2 };
+  const on = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  const p = on ? toPage(e) : { x: S.page.w/2, y: S.page.h/2 };
   loadFiles(e.dataTransfer.files, p.x, p.y);
 });
 addEventListener("paste", e => {
@@ -538,16 +758,12 @@ addEventListener("paste", e => {
   if (f.length) loadFiles(f);
 });
 
-// ------------------------------------------------------------- controls
+/* ============================================================== controls */
 const bind = (id, fn, label) => {
   const el = document.getElementById(id);
-  el.oninput = () => {
-    fn(el.value);
-    if (label) document.getElementById(label).textContent = el.value;
-    draw();
-  };
+  el.oninput = () => { fn(el.value); if (label) document.getElementById(label).textContent = el.value; draw(); };
 };
-bind("cell",  v => S.cell = +v,        "cellv");
+bind("cell",  v => S.cell  = +v,       "cellv");
 bind("cover", v => S.cover = +v / 100, "coverv");
 bind("grain", v => S.grain = +v,       "grainv");
 document.getElementById("paper").oninput = e => { S.paper = e.target.value; draw(); };
@@ -556,46 +772,80 @@ document.getElementById("preset").onchange = e => {
   S.page = { w, h }; draw();
 };
 
-// --------------------------------------------------------------- export
-function save(canvas, name) {
-  canvas.toBlob(b => {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(b);
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }, "image/png");
+/* ================================================================ export */
+function saveBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
+const savePng = (canvas, name) => canvas.toBlob(b => saveBlob(b, name), "image/png");
 
 document.getElementById("expPng").onclick = () => {
   const keep = S.sel; S.sel = null; render();
-  save(cv, "riso.png");
+  savePng(cv, "riso.png");
   S.sel = keep; draw();
 };
 
 document.getElementById("expPlates").onclick = () => {
   S.folders.forEach((f, i) => {
     if (!f.items.length) return;
-    const den = densityOf(f);
-    const { canvas } = halftone(den, f, S.cell, "#000000");
+    const { canvas } = halftone(densityOf(f), f, S.cell, "#000000");
     const out = document.createElement("canvas");
     out.width = S.page.w; out.height = S.page.h;
     const g = out.getContext("2d");
     g.fillStyle = "#fff"; g.fillRect(0, 0, out.width, out.height);
     g.drawImage(canvas, 0, 0);
-    save(out, `plate-${i + 1}-${f.name.replace(/\s+/g, "")}.png`);
+    savePng(out, `plate-${i+1}-${f.name.replace(/\s+/g, "")}.png`);
   });
 };
 
-// ------------------------------------------------------------------ boot
+function docToPSD() {
+  const { w, h } = S.page;
+  const keep = S.sel; S.sel = null; render();          // composite without the outline
+  const layers = [];
+
+  const paper = document.createElement("canvas");
+  paper.width = w; paper.height = h;
+  const pg = paper.getContext("2d");
+  pg.fillStyle = S.paper; pg.fillRect(0, 0, w, h);
+  layers.push({ name: "PAPER", blend: "norm", opacity: 255, planes: planesOf(paper, w, h) });
+
+  for (const f of S.folders) {
+    if (!f.items.length) continue;
+    const { canvas } = halftone(densityOf(f), f, S.cell, f.color);
+    const off = document.createElement("canvas");
+    off.width = w; off.height = h;
+    off.getContext("2d").drawImage(canvas, f.dx, f.dy);
+    layers.push({ name: f.name, blend: "mul ", opacity: 255, planes: planesOf(off, w, h) });
+  }
+
+  if (S.grain > 0) {
+    if (!grainTile) grainTile = makeGrain();
+    const gc = document.createElement("canvas");
+    gc.width = w; gc.height = h;
+    const gg = gc.getContext("2d");
+    gg.fillStyle = gg.createPattern(grainTile, "repeat");
+    gg.fillRect(0, 0, w, h);
+    layers.push({ name: "PAPER GRAIN", blend: "over",
+                  opacity: Math.round(S.grain / 100 * 255), planes: planesOf(gc, w, h) });
+  }
+
+  const bytes = buildPSD(w, h, layers, planesOf(cv, w, h));
+  S.sel = keep; draw();
+  return bytes;
+}
+
+document.getElementById("expPsd").onclick = () => {
+  saveBlob(new Blob([docToPSD()], { type: "image/vnd.adobe.photoshop" }), "riso.psd");
+};
+
+/* ================================================================== boot */
 buildFolders(); buildSel(); draw();
 
-// test hook
-window.__riso = { S, addImage, render, loadURL(url, f) {
-  const img = new Image();
-  img.onload = () => addImage(img, f ?? S.active);
-  img.src = url;
-}};
+window.__riso = { S, addImage, render, buildPSD, docToPSD, parsePSD, planesOf, packBits,
+  loadURL(url, f) { const img = new Image(); img.onload = () => addImage(img, f ?? S.active); img.src = url; } };
 </script>
 </body>
 </html>
