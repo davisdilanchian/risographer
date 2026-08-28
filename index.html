@@ -192,7 +192,11 @@ const RAD = Math.PI / 180;
 // resolution used for the on-screen canvas; capped so a 600dpi A3 still drags
 function previewDpi() {
   const area = S.pageIn.w * S.pageIn.h;
-  return Math.max(40, Math.min(S.dpi, Math.sqrt(MAX_PREVIEW_PX / area)));
+  // While dragging, drop the working resolution hard. Rasterising every layer
+  // into a full-size density buffer is the bulk of a frame, and `fast` sampling
+  // doesn't touch that cost -- only fewer pixels does. Sharpens on release.
+  const budget = fast ? MAX_PREVIEW_PX / 3.5 : MAX_PREVIEW_PX;
+  return Math.max(40, Math.min(S.dpi, Math.sqrt(budget / area)));
 }
 function geom(dpi) {
   return {
@@ -310,8 +314,20 @@ function plateCanvas(folder, dpi, W, H, cell, color) {
   return canvas === out ? canvas : out;
 }
 
-function renderPage(dpi, target, withSel) {
+// A folder's plate only changes when its own contents or the screen settings
+// change. While you drag one image the other folder is untouched, so rebuilding
+// it every frame is pure waste -- with a 9-layer PSD that was most of the frame.
+let uid = 0;
+function folderKey(f, dpi, cell) {
+  return [dpi, cell, S.cover, f.angle, f.color, fast, W_H_KEY,
+    ...f.items.map(i => `${i.id}:${i.x.toFixed(3)},${i.y.toFixed(3)},${i.w.toFixed(3)},${i.h.toFixed(3)},${i.rot|0}`)
+  ].join("|");
+}
+let W_H_KEY = "";
+
+function renderPage(dpi, target, withSel, useCache) {
   const { W, H, cell } = geom(dpi);
+  W_H_KEY = W + "x" + H;
   target.width = W; target.height = H;
   const c = target.getContext("2d");
   c.fillStyle = S.paper;
@@ -319,8 +335,15 @@ function renderPage(dpi, target, withSel) {
 
   let dots = 0;
   for (const f of S.folders) {
-    if (!f.items.length) { f.peak = 0; continue; }
-    const { canvas, drawn } = halftone(densityOf(f, dpi, W, H), f, dpi, W, H, cell, f.color);
+    if (!f.items.length) { f.peak = 0; f._cache = null; continue; }
+    let canvas, drawn;
+    const key = useCache ? folderKey(f, dpi, cell) : null;
+    if (key && f._cache && f._cache.key === key) {
+      ({ canvas, drawn } = f._cache); f.peak = f._cache.peak;
+    } else {
+      ({ canvas, drawn } = halftone(densityOf(f, dpi, W, H), f, dpi, W, H, cell, f.color));
+      if (key) f._cache = { key, canvas, drawn, peak: f.peak };
+    }
     dots += drawn;
     const px = f.off / 25.4 * dpi;
     c.globalCompositeOperation = "multiply";
@@ -358,7 +381,7 @@ function renderPage(dpi, target, withSel) {
 function render() {
   const t0 = performance.now();
   const dpi = previewDpi();
-  const dots = renderPage(dpi, cv, true);
+  const dots = renderPage(dpi, cv, true, true);
   const total = S.folders.reduce((a, f) => a + f.items.length, 0);
   document.getElementById("hint").style.display = total ? "none" : "flex";
   document.getElementById("stat").textContent =
@@ -401,7 +424,7 @@ function addImage(img, folderIndex, cxIn, cyIn) {
   const wIn = S.pageIn.w * 0.6;
   const hIn = wIn * (img.naturalHeight / img.naturalWidth);
   const it = {
-    img, w: wIn, h: hIn, rot: 0,
+    img, w: wIn, h: hIn, rot: 0, id: ++uid,
     x: (cxIn ?? S.pageIn.w/2) - wIn/2,
     y: (cyIn ?? S.pageIn.h/2) - hIn/2
   };
@@ -411,16 +434,34 @@ function addImage(img, folderIndex, cxIn, cyIn) {
   return it;
 }
 
+// Sniff the actual file signature. Filenames lie: a PSD saved from a browser or
+// a chat app often arrives with no extension at all and an empty MIME type.
+async function sniffPSD(file) {
+  try {
+    const h = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    return h[0] === 0x38 && h[1] === 0x42 && h[2] === 0x50 && h[3] === 0x53;   // "8BPS"
+  } catch { return false; }
+}
+
 function loadFiles(files, cx, cy) {
-  [...files].forEach((file, k) => {
+  [...files].forEach(async (file, k) => {
     const ox = (cx ?? S.pageIn.w/2) + k*0.18, oy = (cy ?? S.pageIn.h/2) + k*0.18;
-    const isPsd = /\.psd$/i.test(file.name) || file.type === "image/vnd.adobe.photoshop";
-    if (isPsd) importPSD(file, ox, oy);
-    else if (file.type.startsWith("image/")) {
+
+    if (await sniffPSD(file)) { importPSD(file, ox, oy); return; }
+
+    if (file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i.test(file.name)) {
       const img = new Image();
-      img.onload = () => addImage(img, S.active, ox, oy);
-      img.src = URL.createObjectURL(file);
+      const url = URL.createObjectURL(file);
+      img.onload  = () => { addImage(img, S.active, ox, oy); URL.revokeObjectURL(url); };
+      img.onerror = () => { URL.revokeObjectURL(url);
+        alert(`Couldn't read "${file.name}".\n\nIt looks like an image but the browser couldn't decode it.`); };
+      img.src = url;
+      return;
     }
+
+    // never fail silently -- that reads as "the app is broken"
+    alert(`"${file.name}" isn't an image or a PSD, so there was nothing to place.\n\n`
+        + `Supported: PNG, JPEG, GIF, WebP, BMP, AVIF, and .psd (8-bit RGB or greyscale).`);
   });
 }
 

@@ -1,0 +1,3 @@
+# never commit test artwork into a public repo
+*.psd
+_*
